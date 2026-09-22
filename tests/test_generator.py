@@ -19,7 +19,8 @@ def _empty_diff() -> DiffResult:
 class TestTransactionWrapping:
     def test_wraps_in_transaction(self) -> None:
         diff = DiffResult()
-        diff.tables_added.append(TableDef(name="users", columns=[ColumnDef(name="id", data_type="integer")]))
+        col = ColumnDef(name="id", data_type="integer")
+        diff.tables_added.append(TableDef(name="users", columns=[col]))
         sql = MigrationGenerator(diff).generate()
         assert sql.strip().startswith("BEGIN;")
         assert sql.strip().endswith("COMMIT;")
@@ -125,7 +126,9 @@ class TestAlterColumnSQL:
 class TestIndexSQL:
     def test_generates_create_index_sql(self) -> None:
         diff = DiffResult()
-        diff.indexes_added.append(IndexDef(name="idx_users_email", table="users", columns=["email"]))
+        diff.indexes_added.append(
+            IndexDef(name="idx_users_email", table="users", columns=["email"])
+        )
         sql = MigrationGenerator(diff).generate()
         assert "CREATE" in sql
         assert "INDEX" in sql

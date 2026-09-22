@@ -12,6 +12,7 @@ from rich.table import Table
 from pg_schema_diff.differ import SchemaDiffer
 from pg_schema_diff.generator import MigrationGenerator
 from pg_schema_diff.inspector import SchemaInspector
+from pg_schema_diff.models import DiffResult
 
 console = Console()
 
@@ -109,7 +110,7 @@ def inspect(dsn: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _diff_to_json(diff_result: "pg_schema_diff.models.DiffResult") -> str:  # type: ignore[name-defined]
+def _diff_to_json(diff_result: DiffResult) -> str:  # type: ignore[name-defined]
     """Serialize the diff result to a JSON string."""
     data = {
         "tables_added": [t.name for t in diff_result.tables_added],
@@ -133,7 +134,7 @@ def _diff_to_json(diff_result: "pg_schema_diff.models.DiffResult") -> str:  # ty
     return json.dumps(data, indent=2)
 
 
-def _diff_summary(diff_result: "pg_schema_diff.models.DiffResult") -> str:  # type: ignore[name-defined]
+def _diff_summary(diff_result: DiffResult) -> str:  # type: ignore[name-defined]
     """Return a human-readable plain-text summary of the diff."""
     lines = ["Schema Diff Summary", "=" * 40]
     lines.append(f"Tables added:    {len(diff_result.tables_added)}")

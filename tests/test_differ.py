@@ -6,7 +6,11 @@ from pg_schema_diff.differ import SchemaDiffer
 from pg_schema_diff.models import ColumnDef, IndexDef, SchemaSnapshot, TableDef
 
 
-def _make_table(name: str, columns: list[ColumnDef] | None = None, indexes: list[IndexDef] | None = None) -> TableDef:
+def _make_table(
+    name: str,
+    columns: list[ColumnDef] | None = None,
+    indexes: list[IndexDef] | None = None,
+) -> TableDef:
     return TableDef(name=name, columns=columns or [], indexes=indexes or [])
 
 

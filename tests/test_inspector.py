@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import pytest
+from typing import Any
+
 import psycopg2
+import pytest
 
 from pg_schema_diff.inspector import SchemaInspector
 from pg_schema_diff.models import SchemaSnapshot
 
 
 class TestSchemaInspectorSnapshot:
-    def test_snapshot_returns_schema_snapshot(self, mocker: "pytest_mock.MockerFixture") -> None:  # type: ignore[name-defined]
+    def test_snapshot_returns_schema_snapshot(self, mocker: Any) -> None:  # type: ignore[name-defined]
         """Snapshot builds a SchemaSnapshot correctly from mocked cursor results."""
         mock_conn = mocker.MagicMock()
         mock_cursor = mocker.MagicMock()
@@ -49,7 +51,7 @@ class TestSchemaInspectorSnapshot:
         assert users_table.columns[0].is_primary_key is True
         assert users_table.columns[0].nullable is False  # "NO" → False
 
-    def test_snapshot_with_no_tables(self, mocker: "pytest_mock.MockerFixture") -> None:  # type: ignore[name-defined]
+    def test_snapshot_with_no_tables(self, mocker: Any) -> None:  # type: ignore[name-defined]
         """Empty database returns an empty SchemaSnapshot."""
         mock_conn = mocker.MagicMock()
         mock_cursor = mocker.MagicMock()
@@ -70,7 +72,7 @@ class TestSchemaInspectorSnapshot:
         assert snapshot.foreign_keys == []
         assert snapshot.enums == {}
 
-    def test_connection_error_raises(self, mocker: "pytest_mock.MockerFixture") -> None:  # type: ignore[name-defined]
+    def test_connection_error_raises(self, mocker: Any) -> None:  # type: ignore[name-defined]
         """OperationalError from psycopg2.connect should propagate to the caller."""
         mocker.patch(
             "psycopg2.connect",
@@ -82,7 +84,7 @@ class TestSchemaInspectorSnapshot:
         with pytest.raises(psycopg2.OperationalError):
             inspector.snapshot()
 
-    def test_connection_is_closed_after_snapshot(self, mocker: "pytest_mock.MockerFixture") -> None:  # type: ignore[name-defined]
+    def test_connection_is_closed_after_snapshot(self, mocker: Any) -> None:  # type: ignore[name-defined]
         """The DB connection must be closed even on success."""
         mock_conn = mocker.MagicMock()
         mock_cursor = mocker.MagicMock()

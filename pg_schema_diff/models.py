@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -13,7 +12,7 @@ class ColumnDef:
     name: str
     data_type: str
     nullable: bool = True
-    default: Optional[str] = None
+    default: str | None = None
     is_primary_key: bool = False
 
 
@@ -23,7 +22,7 @@ class IndexDef:
 
     name: str
     table: str
-    columns: List[str]
+    columns: list[str]
     unique: bool = False
     method: str = "btree"
 
@@ -33,8 +32,8 @@ class TableDef:
     """Represents a PostgreSQL table with its columns and indexes."""
 
     name: str
-    columns: List[ColumnDef] = field(default_factory=list)
-    indexes: List[IndexDef] = field(default_factory=list)
+    columns: list[ColumnDef] = field(default_factory=list)
+    indexes: list[IndexDef] = field(default_factory=list)
 
 
 @dataclass
@@ -43,9 +42,9 @@ class ForeignKeyDef:
 
     name: str
     table: str
-    columns: List[str]
+    columns: list[str]
     ref_table: str
-    ref_columns: List[str]
+    ref_columns: list[str]
     on_delete: str = "NO ACTION"
 
 
@@ -53,26 +52,26 @@ class ForeignKeyDef:
 class SchemaSnapshot:
     """A complete snapshot of a PostgreSQL schema."""
 
-    tables: Dict[str, TableDef] = field(default_factory=dict)
-    foreign_keys: List[ForeignKeyDef] = field(default_factory=list)
-    enums: Dict[str, List[str]] = field(default_factory=dict)
+    tables: dict[str, TableDef] = field(default_factory=dict)
+    foreign_keys: list[ForeignKeyDef] = field(default_factory=list)
+    enums: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
 class DiffResult:
     """The result of comparing two SchemaSnapshot objects."""
 
-    tables_added: List[TableDef] = field(default_factory=list)
-    tables_dropped: List[str] = field(default_factory=list)
-    columns_added: List[tuple[str, ColumnDef]] = field(default_factory=list)
-    columns_dropped: List[tuple[str, str]] = field(default_factory=list)
-    columns_altered: List[tuple[str, ColumnDef, ColumnDef]] = field(default_factory=list)
-    indexes_added: List[IndexDef] = field(default_factory=list)
-    indexes_dropped: List[IndexDef] = field(default_factory=list)
-    fks_added: List[ForeignKeyDef] = field(default_factory=list)
-    fks_dropped: List[ForeignKeyDef] = field(default_factory=list)
-    enums_added: List[tuple[str, List[str]]] = field(default_factory=list)
-    enums_altered: List[tuple[str, List[str], List[str]]] = field(default_factory=list)
+    tables_added: list[TableDef] = field(default_factory=list)
+    tables_dropped: list[str] = field(default_factory=list)
+    columns_added: list[tuple[str, ColumnDef]] = field(default_factory=list)
+    columns_dropped: list[tuple[str, str]] = field(default_factory=list)
+    columns_altered: list[tuple[str, ColumnDef, ColumnDef]] = field(default_factory=list)
+    indexes_added: list[IndexDef] = field(default_factory=list)
+    indexes_dropped: list[IndexDef] = field(default_factory=list)
+    fks_added: list[ForeignKeyDef] = field(default_factory=list)
+    fks_dropped: list[ForeignKeyDef] = field(default_factory=list)
+    enums_added: list[tuple[str, list[str]]] = field(default_factory=list)
+    enums_altered: list[tuple[str, list[str], list[str]]] = field(default_factory=list)
 
     def is_empty(self) -> bool:
         """Return True if there are no detected differences."""
