@@ -102,14 +102,14 @@ class SchemaInspector:
         finally:
             conn.close()
 
-    def _build_snapshot(self, conn: psycopg2.connection) -> SchemaSnapshot:  # type: ignore[name-defined]
+    def _build_snapshot(self, conn: psycopg2.connection) -> SchemaSnapshot:
         with conn.cursor() as cur:
             tables = self._fetch_tables(cur)
             foreign_keys = self._fetch_foreign_keys(cur)
             enums = self._fetch_enums(cur)
         return SchemaSnapshot(tables=tables, foreign_keys=foreign_keys, enums=enums)
 
-    def _fetch_tables(self, cur: psycopg2.cursor) -> dict[str, TableDef]:  # type: ignore[name-defined]
+    def _fetch_tables(self, cur: psycopg2.cursor) -> dict[str, TableDef]:
         cur.execute(_SQL_TABLES)
         table_names = [row[0] for row in cur.fetchall()]
         tables: dict[str, TableDef] = {}
@@ -119,7 +119,7 @@ class SchemaInspector:
             tables[name] = TableDef(name=name, columns=columns, indexes=indexes)
         return tables
 
-    def _fetch_columns(self, cur: psycopg2.cursor, table: str) -> list[ColumnDef]:  # type: ignore[name-defined]
+    def _fetch_columns(self, cur: psycopg2.cursor, table: str) -> list[ColumnDef]:
         cur.execute(_SQL_COLUMNS, (table,))
         rows = cur.fetchall()
 
@@ -139,7 +139,7 @@ class SchemaInspector:
             )
         return columns
 
-    def _fetch_indexes(self, cur: psycopg2.cursor, table: str) -> list[IndexDef]:  # type: ignore[name-defined]
+    def _fetch_indexes(self, cur: psycopg2.cursor, table: str) -> list[IndexDef]:
         cur.execute(_SQL_INDEXES, (table,))
         indexes = []
         for indexname, indexdef in cur.fetchall():
@@ -158,7 +158,7 @@ class SchemaInspector:
             )
         return indexes
 
-    def _fetch_foreign_keys(self, cur: psycopg2.cursor) -> list[ForeignKeyDef]:  # type: ignore[name-defined]
+    def _fetch_foreign_keys(self, cur: psycopg2.cursor) -> list[ForeignKeyDef]:
         cur.execute(_SQL_FOREIGN_KEYS)
         rows = cur.fetchall()
 
@@ -177,7 +177,7 @@ class SchemaInspector:
             fks[constraint_name].ref_columns.append(ref_col)
         return list(fks.values())
 
-    def _fetch_enums(self, cur: psycopg2.cursor) -> dict[str, list[str]]:  # type: ignore[name-defined]
+    def _fetch_enums(self, cur: psycopg2.cursor) -> dict[str, list[str]]:
         cur.execute(_SQL_ENUMS)
         enums: dict[str, list[str]] = {}
         for typname, enumlabel in cur.fetchall():

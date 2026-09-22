@@ -121,7 +121,7 @@ def _column_def_sql(col: ColumnDef) -> str:
     return " ".join(parts)
 
 
-def _create_table_statement(table: TableDef) -> str:  # type: ignore[name-defined]
+def _create_table_statement(table: TableDef) -> str:
     """Return a CREATE TABLE SQL statement for the given TableDef."""
     col_lines = []
     pk_cols = [c.name for c in table.columns if c.is_primary_key]
