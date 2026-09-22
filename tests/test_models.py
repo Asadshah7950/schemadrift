@@ -1,8 +1,8 @@
-"""Unit tests for pg_schema_diff.models dataclasses."""
+"""Unit tests for schemadrift.models dataclasses."""
 
 from __future__ import annotations
 
-from pg_schema_diff.models import (
+from schemadrift.models import (
     ColumnDef,
     DiffResult,
     ForeignKeyDef,

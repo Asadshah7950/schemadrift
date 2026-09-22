@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pg_schema_diff.models import (
+from schemadrift.models import (
     ColumnDef,
     DiffResult,
     SchemaSnapshot,

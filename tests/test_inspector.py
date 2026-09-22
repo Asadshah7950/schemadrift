@@ -7,8 +7,8 @@ from typing import Any
 import psycopg2
 import pytest
 
-from pg_schema_diff.inspector import SchemaInspector
-from pg_schema_diff.models import SchemaSnapshot
+from schemadrift.inspector import SchemaInspector
+from schemadrift.models import SchemaSnapshot
 
 
 class TestSchemaInspectorSnapshot:

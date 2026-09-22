@@ -1,10 +1,10 @@
-# pg-schema-diff
+# schemadrift
 
 > **Detect schema drift between PostgreSQL databases and generate safe, ordered migration SQL — from the command line.**
 
-[![CI](https://github.com/Asadshah7950/pg-schema-diff/actions/workflows/ci.yml/badge.svg)](https://github.com/Asadshah7950/pg-schema-diff/actions/workflows/ci.yml)
-[![PyPI version](https://img.shields.io/pypi/v/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
-[![Python versions](https://img.shields.io/pypi/pyversions/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
+[![CI](https://github.com/Asadshah7950/schemadrift/actions/workflows/ci.yml/badge.svg)](https://github.com/Asadshah7950/schemadrift/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/schemadrift.svg)](https://pypi.org/project/schemadrift/)
+[![Python versions](https://img.shields.io/pypi/pyversions/schemadrift.svg)](https://pypi.org/project/schemadrift/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -23,14 +23,14 @@
 ## Installation
 
 ```bash
-pip install pg-schema-diff
+pip install schemadrift
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/Asadshah7950/pg-schema-diff.git
-cd pg-schema-diff
+git clone https://github.com/Asadshah7950/schemadrift.git
+cd schemadrift
 pip install -e '.[dev]'
 ```
 
@@ -41,9 +41,9 @@ pip install -e '.[dev]'
 ### Python API
 
 ```python
-from pg_schema_diff.inspector import SchemaInspector
-from pg_schema_diff.differ import SchemaDiffer
-from pg_schema_diff.generator import MigrationGenerator
+from schemadrift.inspector import SchemaInspector
+from schemadrift.differ import SchemaDiffer
+from schemadrift.generator import MigrationGenerator
 
 # Introspect both databases
 source = SchemaInspector("postgres://user:pass@source-host/mydb").snapshot()
@@ -90,24 +90,24 @@ COMMIT;
 
 ```bash
 # Print migration SQL to stdout
-pg-schema-diff diff \
+schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db"
 
 # Save to a file
-pg-schema-diff diff \
+schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --output migration.sql
 
 # JSON output
-pg-schema-diff diff \
+schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --format json
 
 # Human-readable summary
-pg-schema-diff diff \
+schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --format summary
@@ -116,7 +116,7 @@ pg-schema-diff diff \
 ### `inspect` — Print a schema overview
 
 ```bash
-pg-schema-diff inspect --dsn "postgres://user:pass@host/db"
+schemadrift inspect --dsn "postgres://user:pass@host/db"
 ```
 
 Output:
@@ -139,11 +139,11 @@ Foreign keys: 2
 
 | Module | Description |
 |---|---|
-| [`pg_schema_diff/models.py`](pg_schema_diff/models.py) | Dataclasses for all schema objects (`ColumnDef`, `TableDef`, `IndexDef`, `ForeignKeyDef`, `SchemaSnapshot`, `DiffResult`) |
-| [`pg_schema_diff/inspector.py`](pg_schema_diff/inspector.py) | `SchemaInspector` — connects to PostgreSQL and builds a `SchemaSnapshot` using `information_schema` and `pg_catalog` queries |
-| [`pg_schema_diff/differ.py`](pg_schema_diff/differ.py) | `SchemaDiffer` — pure-Python comparison engine; no DB connection required |
-| [`pg_schema_diff/generator.py`](pg_schema_diff/generator.py) | `MigrationGenerator` — converts a `DiffResult` into safe, ordered SQL wrapped in a transaction |
-| [`pg_schema_diff/cli.py`](pg_schema_diff/cli.py) | Click CLI exposing `diff` and `inspect` commands with Rich terminal output |
+| [`schemadrift/models.py`](schemadrift/models.py) | Dataclasses for all schema objects (`ColumnDef`, `TableDef`, `IndexDef`, `ForeignKeyDef`, `SchemaSnapshot`, `DiffResult`) |
+| [`schemadrift/inspector.py`](schemadrift/inspector.py) | `SchemaInspector` — connects to PostgreSQL and builds a `SchemaSnapshot` using `information_schema` and `pg_catalog` queries |
+| [`schemadrift/differ.py`](schemadrift/differ.py) | `SchemaDiffer` — pure-Python comparison engine; no DB connection required |
+| [`schemadrift/generator.py`](schemadrift/generator.py) | `MigrationGenerator` — converts a `DiffResult` into safe, ordered SQL wrapped in a transaction |
+| [`schemadrift/cli.py`](schemadrift/cli.py) | Click CLI exposing `diff` and `inspect` commands with Rich terminal output |
 
 ---
 

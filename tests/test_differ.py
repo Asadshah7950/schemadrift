@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pg_schema_diff.differ import SchemaDiffer
-from pg_schema_diff.models import ColumnDef, IndexDef, SchemaSnapshot, TableDef
+from schemadrift.differ import SchemaDiffer
+from schemadrift.models import ColumnDef, IndexDef, SchemaSnapshot, TableDef
 
 
 def _make_table(

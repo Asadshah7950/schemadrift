@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pg_schema_diff.models import ColumnDef, DiffResult, TableDef
+from schemadrift.models import ColumnDef, DiffResult, TableDef
 
 
 class MigrationGenerator:

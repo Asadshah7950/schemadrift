@@ -7,7 +7,7 @@ import re
 import psycopg2
 import psycopg2.extras
 
-from pg_schema_diff.models import (
+from schemadrift.models import (
     ColumnDef,
     ForeignKeyDef,
     IndexDef,

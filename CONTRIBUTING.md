@@ -1,4 +1,4 @@
-# Contributing to pg-schema-diff
+# Contributing to schemadrift
 
 Thank you for your interest in contributing! Here's how to get set up quickly.
 
@@ -7,8 +7,8 @@ Thank you for your interest in contributing! Here's how to get set up quickly.
 Clone the repo and install in editable mode with all dev dependencies:
 
 ```bash
-git clone https://github.com/Asadshah7950/pg-schema-diff.git
-cd pg-schema-diff
+git clone https://github.com/Asadshah7950/schemadrift.git
+cd schemadrift
 pip install -e '.[dev]'
 ```
 

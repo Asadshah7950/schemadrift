@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pg_schema_diff.generator import MigrationGenerator
-from pg_schema_diff.models import (
+from schemadrift.generator import MigrationGenerator
+from schemadrift.models import (
     ColumnDef,
     DiffResult,
     ForeignKeyDef,

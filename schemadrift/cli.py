@@ -9,10 +9,10 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from pg_schema_diff.differ import SchemaDiffer
-from pg_schema_diff.generator import MigrationGenerator
-from pg_schema_diff.inspector import SchemaInspector
-from pg_schema_diff.models import DiffResult
+from schemadrift.differ import SchemaDiffer
+from schemadrift.generator import MigrationGenerator
+from schemadrift.inspector import SchemaInspector
+from schemadrift.models import DiffResult
 
 console = Console()
 

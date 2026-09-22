@@ -23,7 +23,7 @@ jobs:
         run: ruff check .
 
       - name: Type check with mypy
-        run: mypy pg_schema_diff
+        run: mypy schemadrift
 
       - name: Run tests (skip live DB tests)
         run: pytest --ignore=tests/test_inspector.py
