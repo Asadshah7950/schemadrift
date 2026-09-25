@@ -18,6 +18,7 @@ console = Console()
 
 
 @click.group()
+
 @click.version_option()
 def main() -> None:
     """pg-schema-diff: Detect schema drift between PostgreSQL databases."""
@@ -36,25 +37,35 @@ def main() -> None:
     "--format",
     "fmt",
     default="sql",
-    type=click.Choice(["sql", "json", "summary"]),
+    type=click.Choice(["sql", "json", "summary", "markdown"]),
     show_default=True,
     help="Output format.",
 )
-def diff(source: str, target: str, output: str | None, fmt: str) -> None:
+@click.option(
+    "--fail-on-drift",
+    is_flag=True,
+    default=False,
+    help="Exit with status code 1 if schema drift is detected (useful for CI/CD checks).",
+)
+def diff(source: str, target: str, output: str | None, fmt: str, fail_on_drift: bool) -> None:
     """Compare SOURCE and TARGET schemas and generate a migration script."""
-    try:
+    if output or fmt == "summary":
         console.print("[bold blue]Inspecting source schema…[/bold blue]")
+    try:
         src_snapshot = SchemaInspector(source).snapshot()
     except Exception as exc:  # noqa: BLE001
         click.echo(f"Error connecting to source database: {exc}", err=True)
         sys.exit(1)
 
-    try:
+    if output or fmt == "summary":
         console.print("[bold blue]Inspecting target schema…[/bold blue]")
+    try:
         tgt_snapshot = SchemaInspector(target).snapshot()
     except Exception as exc:  # noqa: BLE001
         click.echo(f"Error connecting to target database: {exc}", err=True)
         sys.exit(1)
+
+
 
     diff_result = SchemaDiffer(src_snapshot, tgt_snapshot).diff()
 
@@ -62,6 +73,8 @@ def diff(source: str, target: str, output: str | None, fmt: str) -> None:
         content = MigrationGenerator(diff_result).generate()
     elif fmt == "json":
         content = _diff_to_json(diff_result)
+    elif fmt == "markdown":
+        content = _diff_to_markdown(diff_result)
     else:  # summary
         content = _diff_summary(diff_result)
 
@@ -71,6 +84,10 @@ def diff(source: str, target: str, output: str | None, fmt: str) -> None:
         console.print(f"[green]Migration written to {output}[/green]")
     else:
         click.echo(content)
+
+    if fail_on_drift and diff_result.has_drift:
+        sys.exit(1)
+
 
 
 # ---------------------------------------------------------------------------
@@ -147,3 +164,52 @@ def _diff_summary(diff_result: DiffResult) -> str:
     lines.append(f"FKs added:       {len(diff_result.fks_added)}")
     lines.append(f"FKs dropped:     {len(diff_result.fks_dropped)}")
     return "\n".join(lines)
+
+
+def _md_row(label: str, badge: str, items: list[str]) -> str:
+    details = ", ".join(items)
+    return f"| **{label}** | {badge} | `{len(items)}` | {details} |"
+
+
+
+def _diff_to_markdown(diff_result: DiffResult) -> str:
+    """Serialize the diff result to a GitHub-flavored Markdown report."""
+    if not diff_result.has_drift:
+        return "### 🟢 Schema Diff: No Changes Detected\n\nDatabase schemas are in sync."
+
+    lines = [
+        "### 🔍 PostgreSQL Schema Drift Report\n",
+        "| Component | Status | Count | Details |",
+        "| :--- | :--- | :---: | :--- |",
+    ]
+    if diff_result.tables_added:
+        items = [f"`{t.name}`" for t in diff_result.tables_added]
+        lines.append(_md_row("Tables Added", "🟢 Added", items))
+    if diff_result.tables_dropped:
+        items = [f"`{t}`" for t in diff_result.tables_dropped]
+        lines.append(_md_row("Tables Dropped", "🔴 Dropped", items))
+    if diff_result.columns_added:
+        items = [f"`{t}.{c.name}`" for t, c in diff_result.columns_added]
+        lines.append(_md_row("Columns Added", "🟢 Added", items))
+    if diff_result.columns_dropped:
+        items = [f"`{t}.{c}`" for t, c in diff_result.columns_dropped]
+        lines.append(_md_row("Columns Dropped", "🔴 Dropped", items))
+    if diff_result.columns_altered:
+        items = [f"`{t}.{s.name}`" for t, s, _ in diff_result.columns_altered]
+        lines.append(_md_row("Columns Altered", "🟡 Altered", items))
+    if diff_result.indexes_added:
+        items = [f"`{i.name}`" for i in diff_result.indexes_added]
+        lines.append(_md_row("Indexes Added", "🟢 Added", items))
+    if diff_result.indexes_dropped:
+        items = [f"`{i.name}`" for i in diff_result.indexes_dropped]
+        lines.append(_md_row("Indexes Dropped", "🔴 Dropped", items))
+    if diff_result.fks_added:
+        items = [f"`{fk.name}`" for fk in diff_result.fks_added]
+        lines.append(_md_row("Foreign Keys Added", "🟢 Added", items))
+    if diff_result.fks_dropped:
+        items = [f"`{fk.name}`" for fk in diff_result.fks_dropped]
+        lines.append(_md_row("Foreign Keys Dropped", "🔴 Dropped", items))
+
+    return "\n".join(lines)
+
+

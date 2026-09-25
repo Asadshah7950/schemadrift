@@ -111,7 +111,20 @@ schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --format summary
+
+# GitHub Actions / PR Markdown report
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --format markdown >> $GITHUB_STEP_SUMMARY
+
+# CI/CD Gate: Fail pipeline (exit code 1) if schema drift is detected
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --fail-on-drift
 ```
+
 
 ### `inspect` — Print a schema overview
 

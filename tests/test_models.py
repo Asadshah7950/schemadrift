@@ -126,3 +126,10 @@ class TestDiffResult:
         dr = DiffResult()
         dr.tables_dropped.append("users")
         assert dr.is_empty() is False
+
+    def test_has_drift_property(self) -> None:
+        dr = DiffResult()
+        assert dr.has_drift is False
+        dr.columns_dropped.append(("users", "role"))
+        assert dr.has_drift is True
+

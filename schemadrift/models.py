@@ -88,3 +88,9 @@ class DiffResult:
             and not self.enums_added
             and not self.enums_altered
         )
+
+    @property
+    def has_drift(self) -> bool:
+        """Return True if schema drift is detected."""
+        return not self.is_empty()
+
