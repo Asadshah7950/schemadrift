@@ -42,12 +42,41 @@ def main() -> None:
     help="Output format.",
 )
 @click.option(
+    "--direction",
+    "-d",
+    type=click.Choice(["up", "down"]),
+    default="up",
+    show_default=True,
+    help="Migration direction (up=forward source->target, down=rollback target->source).",
+)
+@click.option(
+    "--transaction/--no-transaction",
+    default=True,
+    show_default=True,
+    help="Wrap migration SQL in a BEGIN/COMMIT transaction block.",
+)
+@click.option(
+    "--concurrently",
+    is_flag=True,
+    default=False,
+    help="Create/drop indexes concurrently (disables transaction blocks).",
+)
+@click.option(
     "--fail-on-drift",
     is_flag=True,
     default=False,
     help="Exit with status code 1 if schema drift is detected (useful for CI/CD checks).",
 )
-def diff(source: str, target: str, output: str | None, fmt: str, fail_on_drift: bool) -> None:
+def diff(
+    source: str,
+    target: str,
+    output: str | None,
+    fmt: str,
+    direction: str,
+    transaction: bool,
+    concurrently: bool,
+    fail_on_drift: bool,
+) -> None:
     """Compare SOURCE and TARGET schemas and generate a migration script."""
     if output or fmt == "summary":
         console.print("[bold blue]Inspecting source schema…[/bold blue]")
@@ -65,12 +94,18 @@ def diff(source: str, target: str, output: str | None, fmt: str, fail_on_drift: 
         click.echo(f"Error connecting to target database: {exc}", err=True)
         sys.exit(1)
 
-
-
-    diff_result = SchemaDiffer(src_snapshot, tgt_snapshot).diff()
+    if direction == "down":
+        diff_result = SchemaDiffer(tgt_snapshot, src_snapshot).diff()
+    else:
+        diff_result = SchemaDiffer(src_snapshot, tgt_snapshot).diff()
 
     if fmt == "sql":
-        content = MigrationGenerator(diff_result).generate()
+        use_transaction = False if concurrently else transaction
+        content = MigrationGenerator(
+            diff_result,
+            transaction=use_transaction,
+            concurrent_indexes=concurrently,
+        ).generate()
     elif fmt == "json":
         content = _diff_to_json(diff_result)
     elif fmt == "markdown":

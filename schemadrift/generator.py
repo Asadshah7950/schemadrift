@@ -8,8 +8,18 @@ from schemadrift.models import ColumnDef, DiffResult, TableDef
 class MigrationGenerator:
     """Generates an ordered SQL migration script from a DiffResult."""
 
-    def __init__(self, diff: DiffResult) -> None:
+    def __init__(
+        self,
+        diff: DiffResult,
+        transaction: bool | None = None,
+        concurrent_indexes: bool = False,
+    ) -> None:
         self.diff = diff
+        self.concurrent_indexes = concurrent_indexes
+        if transaction is None:
+            self.transaction = not concurrent_indexes
+        else:
+            self.transaction = transaction
 
     def generate(self) -> str:
         """
@@ -26,7 +36,9 @@ class MigrationGenerator:
         8. ADD foreign keys
         """
         if self.diff.is_empty():
-            return "BEGIN;\n-- No schema differences detected.\nCOMMIT;\n"
+            if self.transaction:
+                return "BEGIN;\n-- No schema differences detected.\nCOMMIT;\n"
+            return "-- No schema differences detected.\n"
 
         statements: list[str] = []
 
@@ -39,7 +51,11 @@ class MigrationGenerator:
 
         # 2. DROP indexes
         for idx in self.diff.indexes_dropped:
-            statements.append(f"-- Drop index: {idx.name}\nDROP INDEX IF EXISTS {_q(idx.name)};")
+            concurrent_kw = "CONCURRENTLY " if self.concurrent_indexes else ""
+            statements.append(
+                f"-- Drop index: {idx.name}\n"
+                f"DROP INDEX {concurrent_kw}IF EXISTS {_q(idx.name)};"
+            )
 
         # 3. ALTER columns (type changes), DROP columns
         for table_name, src_col, tgt_col in self.diff.columns_altered:
@@ -71,10 +87,11 @@ class MigrationGenerator:
         # 7. CREATE indexes
         for idx in self.diff.indexes_added:
             unique_kw = "UNIQUE " if idx.unique else ""
+            concurrent_kw = "CONCURRENTLY " if self.concurrent_indexes else ""
             cols = ", ".join(_q(c) for c in idx.columns)
             statements.append(
                 f"-- Add index: {idx.name}\n"
-                f"CREATE {unique_kw}INDEX {_q(idx.name)} ON {_q(idx.table)} "
+                f"CREATE {unique_kw}INDEX {concurrent_kw}{_q(idx.name)} ON {_q(idx.table)} "
                 f"USING {idx.method} ({cols});"
             )
 
@@ -98,7 +115,9 @@ class MigrationGenerator:
                 )
 
         body = "\n\n".join(statements)
-        return f"BEGIN;\n\n{body}\n\nCOMMIT;\n"
+        if self.transaction:
+            return f"BEGIN;\n\n{body}\n\nCOMMIT;\n"
+        return f"{body}\n"
 
 
 # ---------------------------------------------------------------------------

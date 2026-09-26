@@ -209,3 +209,53 @@ class TestStatementOrdering:
         create_pos = sql.index("CREATE TABLE")
         add_pos = sql.index("ADD COLUMN")
         assert create_pos < add_pos
+
+
+class TestNonTransactionalMigrations:
+    def test_no_transaction_omits_begin_commit(self) -> None:
+        diff = DiffResult()
+        col = ColumnDef(name="id", data_type="integer")
+        diff.tables_added.append(TableDef(name="users", columns=[col]))
+        sql = MigrationGenerator(diff, transaction=False).generate()
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+        assert "CREATE TABLE" in sql
+
+    def test_no_transaction_empty_diff(self) -> None:
+        sql = MigrationGenerator(_empty_diff(), transaction=False).generate()
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+        assert "-- No schema differences detected." in sql
+
+
+class TestConcurrentIndexOperations:
+    def test_create_index_concurrently(self) -> None:
+        diff = DiffResult()
+        diff.indexes_added.append(
+            IndexDef(name="idx_users_email", table="users", columns=["email"])
+        )
+        sql = MigrationGenerator(diff, concurrent_indexes=True).generate()
+        assert "CREATE INDEX CONCURRENTLY" in sql
+        assert "BEGIN;" not in sql
+        assert "COMMIT;" not in sql
+
+    def test_create_unique_index_concurrently(self) -> None:
+        diff = DiffResult()
+        diff.indexes_added.append(
+            IndexDef(
+                name="idx_users_email",
+                table="users",
+                columns=["email"],
+                unique=True,
+            )
+        )
+        sql = MigrationGenerator(diff, concurrent_indexes=True).generate()
+        assert "CREATE UNIQUE INDEX CONCURRENTLY" in sql
+
+    def test_drop_index_concurrently(self) -> None:
+        diff = DiffResult()
+        diff.indexes_dropped.append(
+            IndexDef(name="idx_users_email", table="users", columns=["email"])
+        )
+        sql = MigrationGenerator(diff, concurrent_indexes=True).generate()
+        assert "DROP INDEX CONCURRENTLY IF EXISTS" in sql
