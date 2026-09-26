@@ -163,6 +163,57 @@ class TestDiffCommand:
             assert res.exit_code == 1
             assert "Error connecting to target database" in res.output
 
+    def test_diff_direction_down(self) -> None:
+        runner = CliRunner()
+        src = SchemaSnapshot()
+        tgt = _make_sample_snapshot_with_drift()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--direction", "down"],
+            )
+            assert res.exit_code == 0
+            # Target has 'users' and source doesn't, so down migration (tgt -> src)
+            # should generate DROP TABLE users
+            assert "DROP TABLE" in res.output
+            assert '"users"' in res.output
+
+    def test_diff_no_transaction(self) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.return_value = snap
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--no-transaction"],
+            )
+            assert res.exit_code == 0
+            assert "BEGIN;" not in res.output
+            assert "COMMIT;" not in res.output
+            assert "-- No schema differences detected." in res.output
+
+    def test_diff_concurrently(self) -> None:
+        runner = CliRunner()
+        col_id = ColumnDef(name="id", data_type="integer", is_primary_key=True)
+        col_name = ColumnDef(name="name", data_type="varchar(255)")
+        src_table = TableDef(name="users", columns=[col_id, col_name], indexes=[])
+        src = SchemaSnapshot(tables={"users": src_table})
+        tgt = _make_sample_snapshot_with_drift()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--concurrently"],
+            )
+            assert res.exit_code == 0
+            assert "CREATE INDEX CONCURRENTLY" in res.output
+            assert "BEGIN;" not in res.output
+            assert "COMMIT;" not in res.output
+
 
 class TestInspectCommand:
     def test_inspect_prints_table(self) -> None:

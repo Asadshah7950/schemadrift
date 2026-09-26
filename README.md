@@ -123,6 +123,25 @@ schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --fail-on-drift
+
+# Rollback / down migration (revert target back to source)
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --direction down \
+  --output rollback.sql
+
+# Non-transactional execution (omit BEGIN / COMMIT)
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --no-transaction
+
+# Zero-downtime index management (CREATE / DROP INDEX CONCURRENTLY)
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --concurrently
 ```
 
 
