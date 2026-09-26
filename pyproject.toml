@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "schemadrift"
-version = "0.1.0"
+name = "pg-schema-diff"
+version = "0.2.0"
 description = "CLI tool to detect schema drift between PostgreSQL databases and generate safe migration SQL"
 readme = "README.md"
 license = { text = "MIT" }
@@ -41,6 +41,7 @@ dev = [
 
 [project.scripts]
 schemadrift = "schemadrift.cli:main"
+pg-schema-diff = "schemadrift.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Asadshah7950/schemadrift"

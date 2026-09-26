@@ -3,8 +3,8 @@
 > **Detect schema drift between PostgreSQL databases and generate safe, ordered migration SQL — from the command line.**
 
 [![CI](https://github.com/Asadshah7950/schemadrift/actions/workflows/ci.yml/badge.svg)](https://github.com/Asadshah7950/schemadrift/actions/workflows/ci.yml)
-[![PyPI version](https://img.shields.io/pypi/v/schemadrift.svg)](https://pypi.org/project/schemadrift/)
-[![Python versions](https://img.shields.io/pypi/pyversions/schemadrift.svg)](https://pypi.org/project/schemadrift/)
+[![PyPI version](https://img.shields.io/pypi/v/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -14,8 +14,10 @@
 - 🔍 **Schema inspection** — Introspects live PostgreSQL databases via `psycopg2` (tables, columns, indexes, foreign keys, enums)
 - 🔄 **Drift detection** — Pure-Python diff engine with zero database dependency for the comparison step
 - 📝 **Safe SQL generation** — Produces `BEGIN`/`COMMIT`-wrapped migration scripts in the correct dependency order (drop FKs first, create tables before adding columns, etc.)
+- ⚡ **Zero-downtime migrations** — Native `--concurrently` support for `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`
+- ⏪ **Rollback generator** — Generate reverse / down migrations with `--direction down`
 - 🖥️ **Rich CLI** — Beautiful terminal output powered by [Rich](https://github.com/Textualize/rich)
-- 📦 **Multiple output formats** — SQL, JSON, or human-readable summary
+- 📦 **Multiple output formats** — SQL, JSON, Markdown, or human-readable summary
 - ✅ **95%+ unit test coverage** — All core logic tested without a live database
 
 ---
@@ -23,7 +25,7 @@
 ## Installation
 
 ```bash
-pip install schemadrift
+pip install pg-schema-diff
 ```
 
 Or install from source:
