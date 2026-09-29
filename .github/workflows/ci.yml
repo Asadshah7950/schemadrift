@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -25,5 +25,5 @@ jobs:
       - name: Type check with mypy
         run: mypy schemadrift
 
-      - name: Run tests (skip live DB tests)
-        run: pytest --ignore=tests/test_inspector.py
+      - name: Run test suite with coverage
+        run: pytest --cov=schemadrift --cov-report=term-missing

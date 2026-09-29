@@ -20,6 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Database",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -46,6 +47,8 @@ pg-schema-diff = "schemadrift.cli:main"
 [project.urls]
 Homepage = "https://github.com/Asadshah7950/schemadrift"
 Repository = "https://github.com/Asadshah7950/schemadrift"
+Documentation = "https://github.com/Asadshah7950/schemadrift/blob/main/docs/ARCHITECTURE.md"
+Changelog = "https://github.com/Asadshah7950/schemadrift/releases"
 "Bug Tracker" = "https://github.com/Asadshah7950/schemadrift/issues"
 
 [tool.ruff]
