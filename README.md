@@ -37,6 +37,29 @@ cd schemadrift
 pip install -e '.[dev]'
 ```
 
+### Docker
+
+```bash
+docker build -t schemadrift .
+docker run --rm schemadrift diff --source "postgres://..." --target "postgres://..."
+```
+
+---
+
+## GitHub Actions CI/CD Integration
+
+Detect unintentional schema drift directly in your pull requests and block breaking DDL deployments:
+
+```yaml
+- name: Check PostgreSQL Schema Drift
+  uses: Asadshah7950/schemadrift@main
+  with:
+    source: ${{ secrets.PROD_DATABASE_URL }}
+    target: ${{ secrets.STAGING_DATABASE_URL }}
+    format: 'summary'
+    fail-on-drift: 'true'
+```
+
 ---
 
 ## Quick Start

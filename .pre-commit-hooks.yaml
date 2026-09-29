@@ -1,0 +1,7 @@
+- id: schemadrift
+  name: schemadrift
+  description: Detect PostgreSQL schema drift between environments
+  entry: schemadrift diff
+  language: python
+  types: [python]
+  require_serial: true

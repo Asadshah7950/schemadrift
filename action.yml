@@ -1,0 +1,63 @@
+name: 'PostgreSQL Schema Drift Detector'
+description: 'Detect schema drift between PostgreSQL databases and generate safe migration SQL in CI/CD.'
+author: 'Asad Shah'
+branding:
+  icon: 'database'
+  color: 'blue'
+
+inputs:
+  source:
+    description: 'Source PostgreSQL database connection string (DSN).'
+    required: true
+  target:
+    description: 'Target PostgreSQL database connection string (DSN).'
+    required: true
+  format:
+    description: 'Output format: sql, json, summary, markdown.'
+    required: false
+    default: 'summary'
+  output:
+    description: 'Optional file path to write generated migration SQL or diff report.'
+    required: false
+    default: ''
+  fail-on-drift:
+    description: 'Exit with non-zero status code if schema drift is detected (fails CI build).'
+    required: false
+    default: 'false'
+  direction:
+    description: 'Migration direction: up (forward source->target) or down (rollback target->source).'
+    required: false
+    default: 'up'
+  concurrently:
+    description: 'Create and drop indexes concurrently without transaction blocks.'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install schemadrift
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install pg-schema-diff
+
+    - name: Run schemadrift diff
+      shell: bash
+      run: |
+        ARGS=(--source "${{ inputs.source }}" --target "${{ inputs.target }}" --format "${{ inputs.format }}" --direction "${{ inputs.direction }}")
+        if [ -n "${{ inputs.output }}" ]; then
+          ARGS+=(--output "${{ inputs.output }}")
+        fi
+        if [ "${{ inputs.fail-on-drift }}" = "true" ]; then
+          ARGS+=(--fail-on-drift)
+        fi
+        if [ "${{ inputs.concurrently }}" = "true" ]; then
+          ARGS+=(--concurrently)
+        fi
+        schemadrift diff "${ARGS[@]}"
