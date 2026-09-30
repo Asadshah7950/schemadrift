@@ -132,4 +132,3 @@ class TestDiffResult:
         assert dr.has_drift is False
         dr.columns_dropped.append(("users", "role"))
         assert dr.has_drift is True
-

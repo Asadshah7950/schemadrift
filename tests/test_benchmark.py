@@ -53,14 +53,12 @@ def generate_mock_schema(table_count: int = 50) -> SchemaSnapshot:
                     name=f"fk_{table_name}_parent",
                     table=table_name,
                     columns=["id"],
-                    ref_table=f"table_{i-1}",
+                    ref_table=f"table_{i - 1}",
                     ref_columns=["id"],
                     on_delete="CASCADE",
                 )
             )
-        tables[table_name] = TableDef(
-            name=table_name, columns=columns, indexes=indexes
-        )
+        tables[table_name] = TableDef(name=table_name, columns=columns, indexes=indexes)
     return SchemaSnapshot(tables=tables, foreign_keys=fks, enums={})
 
 

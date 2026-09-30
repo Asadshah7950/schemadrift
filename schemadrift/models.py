@@ -93,4 +93,3 @@ class DiffResult:
     def has_drift(self) -> bool:
         """Return True if schema drift is detected."""
         return not self.is_empty()
-

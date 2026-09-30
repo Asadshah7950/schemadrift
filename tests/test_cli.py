@@ -66,9 +66,6 @@ class TestDiffCommand:
             assert "users" in parsed["tables_added"]
             assert len(parsed["fks_added"]) == 1
 
-
-
-
     def test_diff_summary_format(self) -> None:
         runner = CliRunner()
         src = SchemaSnapshot()

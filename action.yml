@@ -13,7 +13,7 @@ inputs:
     description: 'Target PostgreSQL database connection string (DSN).'
     required: true
   format:
-    description: 'Output format: sql, json, summary, markdown.'
+    description: 'Output format: sql, json, summary, markdown, html.'
     required: false
     default: 'summary'
   output:

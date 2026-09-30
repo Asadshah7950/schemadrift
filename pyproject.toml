@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pg-schema-diff"
-version = "0.2.0"
+version = "0.2.2"
 description = "CLI tool to detect schema drift between PostgreSQL databases and generate safe migration SQL"
 readme = "README.md"
 license = { text = "MIT" }

@@ -53,8 +53,7 @@ class MigrationGenerator:
         for idx in self.diff.indexes_dropped:
             concurrent_kw = "CONCURRENTLY " if self.concurrent_indexes else ""
             statements.append(
-                f"-- Drop index: {idx.name}\n"
-                f"DROP INDEX {concurrent_kw}IF EXISTS {_q(idx.name)};"
+                f"-- Drop index: {idx.name}\nDROP INDEX {concurrent_kw}IF EXISTS {_q(idx.name)};"
             )
 
         # 3. ALTER columns (type changes), DROP columns

@@ -18,7 +18,8 @@
 - ⚡ **Zero-downtime migrations** — Native `--concurrently` support for `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`
 - ⏪ **Rollback generator** — Generate reverse / down migrations with `--direction down`
 - 🖥️ **Rich CLI** — Beautiful terminal output powered by [Rich](https://github.com/Textualize/rich)
-- 📦 **Multiple output formats** — SQL, JSON, Markdown, or human-readable summary
+- 📦 **Multiple output formats** — SQL, JSON, Markdown, human-readable summary, or interactive dark-mode HTML reports
+- 📊 **CI/CD Step Summary** — Automatically writes GitHub-flavored Markdown drift tables to `$GITHUB_STEP_SUMMARY`
 - ✅ **95%+ unit test coverage** — All core logic tested without a live database
 
 ---
@@ -138,11 +139,18 @@ schemadrift diff \
   --target "postgres://user:pass@target-host/db" \
   --format summary
 
-# GitHub Actions / PR Markdown report
+# Interactive dark-mode HTML audit report with 1-click SQL copy
 schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
-  --format markdown >> $GITHUB_STEP_SUMMARY
+  --format html \
+  --output drift-audit.html
+
+# GitHub Actions / PR Markdown report (auto-writes to $GITHUB_STEP_SUMMARY in CI)
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --format markdown
 
 # CI/CD Gate: Fail pipeline (exit code 1) if schema drift is detected
 schemadrift diff \

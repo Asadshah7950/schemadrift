@@ -113,11 +113,13 @@ class TestDropColumnSQL:
 class TestAlterColumnSQL:
     def test_generates_alter_type_sql(self) -> None:
         diff = DiffResult()
-        diff.columns_altered.append((
-            "users",
-            ColumnDef(name="age", data_type="integer"),
-            ColumnDef(name="age", data_type="bigint"),
-        ))
+        diff.columns_altered.append(
+            (
+                "users",
+                ColumnDef(name="age", data_type="integer"),
+                ColumnDef(name="age", data_type="bigint"),
+            )
+        )
         sql = MigrationGenerator(diff).generate()
         assert "ALTER COLUMN" in sql
         assert "TYPE bigint" in sql

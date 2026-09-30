@@ -29,12 +29,12 @@ class TestSchemaInspectorSnapshot:
         # 5. Foreign keys → empty
         # 6. Enums → empty
         mock_cursor.fetchall.side_effect = [
-            [("users",)],                                        # tables
-            [("id", "integer", "NO", None)],                     # columns for users
-            [("id",)],                                           # primary keys for users
-            [],                                                   # indexes for users
-            [],                                                   # foreign keys
-            [],                                                   # enums
+            [("users",)],  # tables
+            [("id", "integer", "NO", None)],  # columns for users
+            [("id",)],  # primary keys for users
+            [],  # indexes for users
+            [],  # foreign keys
+            [],  # enums
         ]
 
         mocker.patch("psycopg2.connect", return_value=mock_conn)
