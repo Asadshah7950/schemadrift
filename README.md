@@ -7,6 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-schemadrift-blue.svg?colorA=24292e&colorB=0366d6&style=flat&logo=github)](https://github.com/marketplace/actions/postgresql-schema-drift-detector)
 
 <p align="center">
   <img src="docs/assets/demo.svg" alt="schemadrift terminal demo" width="100%">
