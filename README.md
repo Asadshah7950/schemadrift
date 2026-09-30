@@ -8,6 +8,10 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<p align="center">
+  <img src="assets/demo.svg" alt="schemadrift demo" width="100%">
+</p>
+
 ---
 
 ## Features

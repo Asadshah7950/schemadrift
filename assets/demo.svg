@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 460" width="100%" height="auto">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; rx: 10px; stroke: #30363d; stroke-width: 1px; }
+      .header-bg { fill: #161b22; rx: 10px 10px 0 0; }
+      .dot-red { fill: #ff5f56; }
+      .dot-yellow { fill: #ffbd2e; }
+      .dot-green { fill: #27c93f; }
+      .title { fill: #8b949e; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 500; }
+      .code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; font-size: 13.5px; line-height: 22px; }
+      .prompt { fill: #38bdf8; font-weight: 600; }
+      .cmd { fill: #f0f6fc; font-weight: 600; }
+      .flag { fill: #79c0ff; }
+      .val { fill: #a5d6ff; }
+      .comment { fill: #8b949e; font-style: italic; }
+      .info { fill: #58a6ff; }
+      .add { fill: #3fb950; font-weight: 600; }
+      .drop { fill: #f85149; font-weight: 600; }
+      .alt { fill: #d29922; font-weight: 600; }
+      .keyword { fill: #ff7b72; font-weight: 600; }
+      .sql { fill: #79c0ff; }
+      .success { fill: #3fb950; font-weight: 700; }
+      .dim { fill: #6e7681; }
+    </style>
+  </defs>
+
+  <!-- Window Frame -->
+  <rect width="880" height="460" class="bg"/>
+  <rect width="880" height="38" class="header-bg"/>
+  
+  <!-- Window Controls -->
+  <circle cx="20" cy="19" r="6" class="dot-red"/>
+  <circle cx="40" cy="19" r="6" class="dot-yellow"/>
+  <circle cx="60" cy="19" r="6" class="dot-green"/>
+  <text x="440" y="24" text-anchor="middle" class="title">schemadrift &mdash; bash &mdash; 880&times;460</text>
+
+  <!-- Terminal Content -->
+  <g transform="translate(24, 68)" class="code">
+    <!-- Command Line -->
+    <text y="0">
+      <tspan class="prompt">asad@local:~$ </tspan>
+      <tspan class="cmd">schemadrift diff </tspan>
+      <tspan class="flag">--source </tspan><tspan class="val">"postgresql://prod_db:5432/main" </tspan>
+      <tspan class="flag">--target </tspan><tspan class="val">"postgresql://staging:5432/main"</tspan>
+    </text>
+
+    <!-- Inspection Output -->
+    <text y="28">
+      <tspan class="dim">[14:02:18] </tspan><tspan class="info">&#x25C9; Inspecting source schema</tspan><tspan class="dim"> &hellip; </tspan><tspan class="success">42 tables, 184 columns, 58 indexes</tspan>
+    </text>
+    <text y="50">
+      <tspan class="dim">[14:02:18] </tspan><tspan class="info">&#x25C9; Inspecting target schema</tspan><tspan class="dim"> &hellip; </tspan><tspan class="success">43 tables, 189 columns, 61 indexes</tspan>
+    </text>
+
+    <!-- Drift Summary -->
+    <text y="82">
+      <tspan class="cmd" font-weight="700">&#x26A0;&#xFE0F;  PostgreSQL Schema Drift Detected:</tspan>
+    </text>
+    <text y="104">
+      <tspan class="add">  + Added Table:     </tspan><tspan class="val">payments</tspan><tspan class="dim"> (id UUID, amount NUMERIC(10,2), status VARCHAR)</tspan>
+    </text>
+    <text y="126">
+      <tspan class="drop">  - Dropped Table:   </tspan><tspan class="val">legacy_audit_logs</tspan><tspan class="dim"> (migrated to cold storage)</tspan>
+    </text>
+    <text y="148">
+      <tspan class="add">  + Added Column:    </tspan><tspan class="val">users.phone_verified</tspan><tspan class="dim"> (BOOLEAN DEFAULT FALSE)</tspan>
+    </text>
+    <text y="170">
+      <tspan class="alt">  ~ Altered Column:  </tspan><tspan class="val">orders.status</tspan><tspan class="dim"> (VARCHAR(50) &rarr; </tspan><tspan class="add">order_status_enum</tspan><tspan class="dim">)</tspan>
+    </text>
+    <text y="192">
+      <tspan class="add">  + Added Index:     </tspan><tspan class="val">idx_payments_user_id</tspan><tspan class="dim"> ON </tspan><tspan class="val">payments(user_id)</tspan>
+    </text>
+
+    <!-- SQL Output -->
+    <text y="226">
+      <tspan class="comment">-- Generated Safe Migration SQL (strict dependency order &amp; ACID transaction):</tspan>
+    </text>
+    <text y="248">
+      <tspan class="keyword">BEGIN;</tspan>
+    </text>
+    <text y="270">
+      <tspan class="sql">  CREATE TABLE "payments" ("id" uuid NOT NULL, "amount" numeric(10,2), PRIMARY KEY ("id"));</tspan>
+    </text>
+    <text y="292">
+      <tspan class="sql">  ALTER TABLE "users" ADD COLUMN "phone_verified" boolean DEFAULT false;</tspan>
+    </text>
+    <text y="314">
+      <tspan class="sql">  CREATE INDEX "idx_payments_user_id" ON "payments" ("user_id");</tspan>
+    </text>
+    <text y="336">
+      <tspan class="keyword">COMMIT;</tspan>
+    </text>
+
+    <!-- Benchmark Timing Status -->
+    <text y="370">
+      <tspan class="success">&#x2714; Migration generated successfully in </tspan><tspan class="add">8.4ms</tspan><tspan class="dim"> &bull; Zero external database locks</tspan>
+    </text>
+  </g>
+</svg>
