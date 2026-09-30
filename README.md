@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
-  <img src="assets/demo.svg" alt="schemadrift demo" width="100%">
+  <img src="docs/assets/demo.svg" alt="schemadrift terminal demo" width="100%">
 </p>
 
 ---

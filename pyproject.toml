@@ -51,6 +51,9 @@ Documentation = "https://github.com/Asadshah7950/schemadrift/blob/main/docs/ARCH
 Changelog = "https://github.com/Asadshah7950/schemadrift/releases"
 "Bug Tracker" = "https://github.com/Asadshah7950/schemadrift/issues"
 
+[tool.setuptools.packages.find]
+include = ["schemadrift*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"

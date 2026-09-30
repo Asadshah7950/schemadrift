@@ -32,7 +32,7 @@
   <circle cx="20" cy="19" r="6" class="dot-red"/>
   <circle cx="40" cy="19" r="6" class="dot-yellow"/>
   <circle cx="60" cy="19" r="6" class="dot-green"/>
-  <text x="440" y="24" text-anchor="middle" class="title">schemadrift &mdash; bash &mdash; 880&times;460</text>
+  <text x="440" y="24" text-anchor="middle" class="title">schemadrift &#8212; bash &#8212; 880&#215;460</text>
 
   <!-- Terminal Content -->
   <g transform="translate(24, 68)" class="code">
@@ -46,10 +46,10 @@
 
     <!-- Inspection Output -->
     <text y="28">
-      <tspan class="dim">[14:02:18] </tspan><tspan class="info">&#x25C9; Inspecting source schema</tspan><tspan class="dim"> &hellip; </tspan><tspan class="success">42 tables, 184 columns, 58 indexes</tspan>
+      <tspan class="dim">[14:02:18] </tspan><tspan class="info">&#x25C9; Inspecting source schema</tspan><tspan class="dim"> &#8230; </tspan><tspan class="success">42 tables, 184 columns, 58 indexes</tspan>
     </text>
     <text y="50">
-      <tspan class="dim">[14:02:18] </tspan><tspan class="info">&#x25C9; Inspecting target schema</tspan><tspan class="dim"> &hellip; </tspan><tspan class="success">43 tables, 189 columns, 61 indexes</tspan>
+      <tspan class="dim">[14:02:18] </tspan><tspan class="info">&#x25C9; Inspecting target schema</tspan><tspan class="dim"> &#8230; </tspan><tspan class="success">43 tables, 189 columns, 61 indexes</tspan>
     </text>
 
     <!-- Drift Summary -->
@@ -66,7 +66,7 @@
       <tspan class="add">  + Added Column:    </tspan><tspan class="val">users.phone_verified</tspan><tspan class="dim"> (BOOLEAN DEFAULT FALSE)</tspan>
     </text>
     <text y="170">
-      <tspan class="alt">  ~ Altered Column:  </tspan><tspan class="val">orders.status</tspan><tspan class="dim"> (VARCHAR(50) &rarr; </tspan><tspan class="add">order_status_enum</tspan><tspan class="dim">)</tspan>
+      <tspan class="alt">  ~ Altered Column:  </tspan><tspan class="val">orders.status</tspan><tspan class="dim"> (VARCHAR(50) &#8594; </tspan><tspan class="add">order_status_enum</tspan><tspan class="dim">)</tspan>
     </text>
     <text y="192">
       <tspan class="add">  + Added Index:     </tspan><tspan class="val">idx_payments_user_id</tspan><tspan class="dim"> ON </tspan><tspan class="val">payments(user_id)</tspan>
@@ -94,7 +94,7 @@
 
     <!-- Benchmark Timing Status -->
     <text y="370">
-      <tspan class="success">&#x2714; Migration generated successfully in </tspan><tspan class="add">8.4ms</tspan><tspan class="dim"> &bull; Zero external database locks</tspan>
+      <tspan class="success">&#x2714; Migration generated successfully in </tspan><tspan class="add">8.4ms</tspan><tspan class="dim"> &#8226; Zero external database locks</tspan>
     </text>
   </g>
 </svg>
