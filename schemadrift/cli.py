@@ -86,6 +86,13 @@ def main() -> None:
     show_default=True,
     help="Write markdown drift summary to $GITHUB_STEP_SUMMARY when running in GitHub Actions.",
 )
+@click.option(
+    "--exclude",
+    "-e",
+    "exclude_tables",
+    multiple=True,
+    help="Exclude specific tables from diff (e.g. -e alembic_version -e _prisma_migrations).",
+)
 def diff(
     source: str,
     target: str,
@@ -96,6 +103,7 @@ def diff(
     concurrently: bool,
     fail_on_drift: bool,
     step_summary: bool,
+    exclude_tables: tuple[str, ...],
 ) -> None:
     """Compare SOURCE and TARGET schemas and generate a migration script."""
     if output or fmt == "summary":
@@ -114,10 +122,11 @@ def diff(
         click.echo(f"Error connecting to target database: {exc}", err=True)
         sys.exit(1)
 
+    excluded_set = set(exclude_tables)
     if direction == "down":
-        diff_result = SchemaDiffer(tgt_snapshot, src_snapshot).diff()
+        diff_result = SchemaDiffer(tgt_snapshot, src_snapshot, exclude_tables=excluded_set).diff()
     else:
-        diff_result = SchemaDiffer(src_snapshot, tgt_snapshot).diff()
+        diff_result = SchemaDiffer(src_snapshot, tgt_snapshot, exclude_tables=excluded_set).diff()
 
     if fmt == "sql":
         use_transaction = False if concurrently else transaction

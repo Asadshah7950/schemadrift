@@ -180,3 +180,29 @@ class TestIndexDiff:
 
         assert result.indexes_added == []
         assert result.indexes_dropped == []
+
+
+class TestExcludeTables:
+    def test_excludes_added_and_dropped_tables(self) -> None:
+        src = _make_snapshot(_make_table("alembic_version"), _make_table("users"))
+        tgt = _make_snapshot(_make_table("users"), _make_table("_prisma_migrations"))
+
+        result = SchemaDiffer(
+            src,
+            tgt,
+            exclude_tables={"alembic_version", "_prisma_migrations"},
+        ).diff()
+
+        assert result.is_empty()
+
+    def test_excludes_columns_and_indexes_on_excluded_table(self) -> None:
+        idx = IndexDef(name="idx_spatial", table="spatial_ref_sys", columns=["srid"])
+        src = _make_snapshot(_make_table("spatial_ref_sys", columns=[ColumnDef("id", "int")]))
+        tgt = _make_snapshot(
+            _make_table("spatial_ref_sys", columns=[ColumnDef("id", "bigint")], indexes=[idx])
+        )
+
+        result = SchemaDiffer(src, tgt, exclude_tables=["spatial_ref_sys"]).diff()
+
+        assert result.is_empty()
+

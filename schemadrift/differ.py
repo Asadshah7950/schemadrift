@@ -13,9 +13,15 @@ from schemadrift.models import (
 class SchemaDiffer:
     """Compares a source and target SchemaSnapshot and returns a DiffResult."""
 
-    def __init__(self, source: SchemaSnapshot, target: SchemaSnapshot) -> None:
+    def __init__(
+        self,
+        source: SchemaSnapshot,
+        target: SchemaSnapshot,
+        exclude_tables: set[str] | list[str] | None = None,
+    ) -> None:
         self.source = source
         self.target = target
+        self.exclude_tables: set[str] = set(exclude_tables or [])
 
     def diff(self) -> DiffResult:
         """Compare source vs target and return all detected differences."""
@@ -31,8 +37,8 @@ class SchemaDiffer:
         src_tables = self.source.tables
         tgt_tables = self.target.tables
 
-        src_names = set(src_tables.keys())
-        tgt_names = set(tgt_tables.keys())
+        src_names = set(src_tables.keys()) - self.exclude_tables
+        tgt_names = set(tgt_tables.keys()) - self.exclude_tables
 
         # Tables in target that don't exist in source → added
         for name in tgt_names - src_names:
@@ -103,8 +109,18 @@ class SchemaDiffer:
             result.indexes_dropped.append(src_idx[name])
 
     def _diff_foreign_keys(self, result: DiffResult) -> None:
-        src_fks = {fk.name: fk for fk in self.source.foreign_keys}
-        tgt_fks = {fk.name: fk for fk in self.target.foreign_keys}
+        src_fks = {
+            fk.name: fk
+            for fk in self.source.foreign_keys
+            if fk.table not in self.exclude_tables
+            and fk.ref_table not in self.exclude_tables
+        }
+        tgt_fks = {
+            fk.name: fk
+            for fk in self.target.foreign_keys
+            if fk.table not in self.exclude_tables
+            and fk.ref_table not in self.exclude_tables
+        }
 
         src_names = set(src_fks.keys())
         tgt_names = set(tgt_fks.keys())

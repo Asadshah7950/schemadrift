@@ -49,6 +49,21 @@ class TestDiffCommand:
             assert res.exit_code == 0
             assert "-- No schema differences detected." in res.output
 
+    def test_diff_exclude_tables(self) -> None:
+        runner = CliRunner()
+        src = SchemaSnapshot()
+        tgt = SchemaSnapshot(tables={"alembic_version": TableDef(name="alembic_version")})
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "-e", "alembic_version"],
+            )
+
+            assert res.exit_code == 0
+            assert "-- No schema differences detected." in res.output
+
     def test_diff_json_format(self) -> None:
         runner = CliRunner()
         src = SchemaSnapshot()

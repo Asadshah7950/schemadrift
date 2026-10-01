@@ -163,6 +163,13 @@ schemadrift diff \
   --target "postgres://user:pass@target-host/db" \
   --fail-on-drift
 
+# Exclude internal tables (e.g. alembic_version, _prisma_migrations, spatial_ref_sys)
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --exclude alembic_version \
+  --exclude _prisma_migrations
+
 # Rollback / down migration (revert target back to source)
 schemadrift diff \
   --source "postgres://user:pass@source-host/db" \

@@ -32,6 +32,10 @@ inputs:
     description: 'Create and drop indexes concurrently without transaction blocks.'
     required: false
     default: 'false'
+  exclude:
+    description: 'Comma-separated list of tables to exclude from diff.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -59,5 +63,12 @@ runs:
         fi
         if [ "${{ inputs.concurrently }}" = "true" ]; then
           ARGS+=(--concurrently)
+        fi
+        if [ -n "${{ inputs.exclude }}" ]; then
+          IFS=',' read -ra EX_ARRAY <<< "${{ inputs.exclude }}"
+          for tbl in "${EX_ARRAY[@]}"; do
+            trimmed=$(echo "$tbl" | xargs)
+            ARGS+=(--exclude "$trimmed")
+          done
         fi
         schemadrift diff "${ARGS[@]}"
