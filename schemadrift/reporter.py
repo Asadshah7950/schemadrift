@@ -16,6 +16,8 @@ def render_json_report(diff_result: DiffResult) -> str:
     """Serialize the diff result to a formatted JSON string."""
     data = {
         "has_drift": diff_result.has_drift,
+        "has_destructive_changes": diff_result.has_destructive_changes,
+        "destructive_changes_count": diff_result.destructive_changes_count,
         "tables_added": [t.name for t in diff_result.tables_added],
         "tables_dropped": list(diff_result.tables_dropped),
         "columns_added": [
@@ -65,6 +67,8 @@ def render_summary_report(diff_result: DiffResult) -> str:
     if diff_result.enums_added or diff_result.enums_altered:
         lines.append(f"Enums added:     {len(diff_result.enums_added)}")
         lines.append(f"Enums altered:   {len(diff_result.enums_altered)}")
+    if diff_result.has_destructive_changes:
+        lines.append(f"Destructive:     {diff_result.destructive_changes_count} drops")
     return "\n".join(lines)
 
 

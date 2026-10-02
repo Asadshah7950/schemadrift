@@ -132,3 +132,23 @@ class TestDiffResult:
         assert dr.has_drift is False
         dr.columns_dropped.append(("users", "role"))
         assert dr.has_drift is True
+
+    def test_destructive_properties(self) -> None:
+        dr = DiffResult()
+        assert dr.has_destructive_changes is False
+        assert dr.destructive_changes_count == 0
+
+        # Adding non-destructive change
+        dr.tables_added.append(TableDef(name="orders"))
+        assert dr.has_destructive_changes is False
+        assert dr.destructive_changes_count == 0
+
+        # Dropping table
+        dr.tables_dropped.append("legacy_users")
+        assert dr.has_destructive_changes is True
+        assert dr.destructive_changes_count == 1
+
+        # Dropping column
+        dr.columns_dropped.append(("orders", "notes"))
+        assert dr.has_destructive_changes is True
+        assert dr.destructive_changes_count == 2

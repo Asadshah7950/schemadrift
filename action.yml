@@ -24,6 +24,10 @@ inputs:
     description: 'Exit with non-zero status code if schema drift is detected (fails CI build).'
     required: false
     default: 'false'
+  fail-on-destructive:
+    description: 'Exit with status code 2 if destructive changes (dropped tables or columns) are detected.'
+    required: false
+    default: 'false'
   direction:
     description: 'Migration direction: up (forward source->target) or down (rollback target->source).'
     required: false
@@ -60,6 +64,9 @@ runs:
         fi
         if [ "${{ inputs.fail-on-drift }}" = "true" ]; then
           ARGS+=(--fail-on-drift)
+        fi
+        if [ "${{ inputs.fail-on-destructive }}" = "true" ]; then
+          ARGS+=(--fail-on-destructive)
         fi
         if [ "${{ inputs.concurrently }}" = "true" ]; then
           ARGS+=(--concurrently)

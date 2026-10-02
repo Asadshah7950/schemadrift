@@ -21,6 +21,7 @@
 - 🔄 **Drift detection** — Pure-Python diff engine with zero database dependency for the comparison step
 - 📝 **Safe SQL generation** — Produces `BEGIN`/`COMMIT`-wrapped migration scripts in the correct dependency order (drop FKs first, create tables before adding columns, etc.)
 - ⚡ **Zero-downtime migrations** — Native `--concurrently` support for `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`
+- 🛑 **Destructive change protection** — Safeguard production with `--fail-on-destructive` (`-w`) to exit with code 2 if dropped tables or columns are detected
 - ⏪ **Rollback generator** — Generate reverse / down migrations with `--direction down`
 - 🖥️ **Rich CLI** — Beautiful terminal output powered by [Rich](https://github.com/Textualize/rich)
 - 📦 **Multiple output formats** — SQL, JSON, Markdown, human-readable summary, or interactive dark-mode HTML reports
@@ -64,6 +65,7 @@ Detect unintentional schema drift directly in your pull requests and block break
     target: ${{ secrets.STAGING_DATABASE_URL }}
     format: 'summary'
     fail-on-drift: 'true'
+    fail-on-destructive: 'true'
 ```
 
 ---
@@ -162,6 +164,12 @@ schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --fail-on-drift
+
+# Destructive Change Gate: Fail pipeline (exit code 2) if tables/columns are dropped
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --fail-on-destructive
 
 # Exclude internal tables (e.g. alembic_version, _prisma_migrations, spatial_ref_sys)
 schemadrift diff \

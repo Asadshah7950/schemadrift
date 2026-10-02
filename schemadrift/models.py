@@ -93,3 +93,13 @@ class DiffResult:
     def has_drift(self) -> bool:
         """Return True if schema drift is detected."""
         return not self.is_empty()
+
+    @property
+    def has_destructive_changes(self) -> bool:
+        """Return True if the diff contains destructive changes (dropped tables or columns)."""
+        return bool(self.tables_dropped or self.columns_dropped)
+
+    @property
+    def destructive_changes_count(self) -> int:
+        """Return total count of destructive changes."""
+        return len(self.tables_dropped) + len(self.columns_dropped)

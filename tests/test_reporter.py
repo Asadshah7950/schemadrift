@@ -65,6 +65,8 @@ def test_render_json_report_empty() -> None:
     out = render_json_report(res)
     data = json.loads(out)
     assert data["has_drift"] is False
+    assert data["has_destructive_changes"] is False
+    assert data["destructive_changes_count"] == 0
     assert data["tables_added"] == []
 
 
@@ -73,6 +75,8 @@ def test_render_json_report_with_drift() -> None:
     out = render_json_report(res)
     data = json.loads(out)
     assert data["has_drift"] is True
+    assert data["has_destructive_changes"] is True
+    assert data["destructive_changes_count"] == 2
     assert "users" in data["tables_added"]
     assert "legacy_logs" in data["tables_dropped"]
     assert data["enums_added"][0]["name"] == "user_role"
@@ -85,6 +89,7 @@ def test_render_summary_report_with_enums() -> None:
     assert "Tables dropped:  1" in summary
     assert "Enums added:     1" in summary
     assert "Enums altered:   1" in summary
+    assert "Destructive:     2 drops" in summary
 
 
 def test_render_markdown_report_empty() -> None:

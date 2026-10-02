@@ -81,6 +81,13 @@ def main() -> None:
     help="Exit with status code 1 if schema drift is detected (useful for CI/CD checks).",
 )
 @click.option(
+    "--fail-on-destructive",
+    "-w",
+    is_flag=True,
+    default=False,
+    help="Exit with status code 2 if destructive changes (dropped tables/columns) are detected.",
+)
+@click.option(
     "--step-summary/--no-step-summary",
     default=True,
     show_default=True,
@@ -102,6 +109,7 @@ def diff(
     transaction: bool,
     concurrently: bool,
     fail_on_drift: bool,
+    fail_on_destructive: bool,
     step_summary: bool,
     exclude_tables: tuple[str, ...],
 ) -> None:
@@ -160,6 +168,14 @@ def diff(
         console.print(f"[green]{file_desc} written to {output}[/green]")
     else:
         click.echo(content)
+
+    if fail_on_destructive and diff_result.has_destructive_changes:
+        click.echo(
+            f"Destructive changes detected ({diff_result.destructive_changes_count} drops). "
+            f"Failing build as requested by --fail-on-destructive.",
+            err=True,
+        )
+        sys.exit(2)
 
     if fail_on_drift and diff_result.has_drift:
         sys.exit(1)

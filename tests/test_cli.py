@@ -139,6 +139,63 @@ class TestDiffCommand:
 
             assert res.exit_code == 0
 
+    def test_fail_on_destructive_fails_when_table_dropped(self) -> None:
+        runner = CliRunner()
+        src = _make_sample_snapshot_with_drift()
+        tgt = SchemaSnapshot()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--fail-on-destructive"],
+            )
+
+            assert res.exit_code == 2
+            assert "Destructive changes detected" in res.output
+
+    def test_fail_on_destructive_short_flag(self) -> None:
+        runner = CliRunner()
+        src = _make_sample_snapshot_with_drift()
+        tgt = SchemaSnapshot()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "-w"],
+            )
+
+            assert res.exit_code == 2
+            assert "Destructive changes detected" in res.output
+
+    def test_fail_on_destructive_passes_when_only_additive(self) -> None:
+        runner = CliRunner()
+        src = SchemaSnapshot()
+        tgt = _make_sample_snapshot_with_drift()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--fail-on-destructive"],
+            )
+
+            assert res.exit_code == 0
+
+    def test_fail_on_destructive_passes_when_no_drift(self) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [snap, snap]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--fail-on-destructive"],
+            )
+
+            assert res.exit_code == 0
+
     def test_diff_output_to_file(self, tmp_path) -> None:
         runner = CliRunner()
         snap = SchemaSnapshot()
