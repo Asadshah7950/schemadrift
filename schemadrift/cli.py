@@ -1,5 +1,7 @@
 """CLI entry point for pg-schema-diff / schemadrift."""
 
+from __future__ import annotations
+
 import os
 import sys
 
