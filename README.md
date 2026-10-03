@@ -26,6 +26,7 @@
 - ⏪ **Rollback generator** — Generate reverse / down migrations with `--direction down`
 - 🖥️ **Rich CLI** — Beautiful terminal output powered by [Rich](https://github.com/Textualize/rich)
 - 📦 **Multiple output formats** — SQL, JSON, Markdown, human-readable summary, or interactive dark-mode HTML reports
+- 🛡️ **Schema Anti-Pattern Linter** — Static analysis detecting missing primary keys (E001), unindexed foreign keys (W001), and redundant prefix indexes (W002) with strict CI gates (`-W`)
 - 📊 **CI/CD Step Summary** — Automatically writes GitHub-flavored Markdown drift tables to `$GITHUB_STEP_SUMMARY`
 - ✅ **95%+ unit test coverage** — All core logic tested without a live database
 
@@ -246,6 +247,35 @@ Output:
 Foreign keys: 2
 ```
 
+### `lint` — Static schema linter & anti-pattern detector
+
+Audit a live database or saved schema snapshot for structural anti-patterns, replication bottlenecks, and redundant indexes:
+
+```bash
+# Lint a live PostgreSQL database
+schemadrift lint --dsn "postgres://user:pass@host/db"
+
+# Lint an offline schema snapshot file
+schemadrift lint --file schema.json
+
+# Fail CI/CD gate on any warnings or errors (exit code 1)
+schemadrift lint --file schema.json --fail-on-warning
+
+# Machine-readable JSON output for automated reporting
+schemadrift lint --file schema.json --format json
+
+# Exclude legacy or third-party tables from lint checks
+schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_sys
+```
+
+#### Lint Rules
+
+| Rule | Severity | Name | Description |
+|---|---|---|---|
+| **E001** | `ERROR` | `missing-primary-key` | Table lacks a primary key. Causes full table rewrites during logical replication and risks duplicate rows. |
+| **W001** | `WARNING` | `unindexed-foreign-key` | Foreign key referencing columns lack a supporting prefix index. Causes sequential scans and table locks on parent table deletes/updates. |
+| **W002** | `WARNING` | `redundant-index` | Table has an index whose columns are a left-prefix of another index on the same table. Wastes disk space and write IOPS. |
+
 ---
 
 ## Architecture
@@ -257,8 +287,9 @@ For complete system design diagrams, DAG topological ordering specifications, an
 | [`schemadrift/models.py`](schemadrift/models.py) | Dataclasses for all schema objects (`ColumnDef`, `TableDef`, `IndexDef`, `ForeignKeyDef`, `SchemaSnapshot`, `DiffResult`) |
 | [`schemadrift/inspector.py`](schemadrift/inspector.py) | `SchemaInspector` — connects to PostgreSQL and builds a `SchemaSnapshot` using `information_schema` and `pg_catalog` queries |
 | [`schemadrift/differ.py`](schemadrift/differ.py) | `SchemaDiffer` — pure-Python comparison engine; no DB connection required |
+| [`schemadrift/linter.py`](schemadrift/linter.py) | `SchemaLinter` — static schema analysis engine detecting missing PKs, unindexed FKs, and redundant prefix indexes |
 | [`schemadrift/generator.py`](schemadrift/generator.py) | `MigrationGenerator` — converts a `DiffResult` into safe, ordered SQL wrapped in a transaction |
-| [`schemadrift/cli.py`](schemadrift/cli.py) | Click CLI exposing `diff` and `inspect` commands with Rich terminal output |
+| [`schemadrift/cli.py`](schemadrift/cli.py) | Click CLI exposing `diff`, `snapshot`, `inspect`, and `lint` commands with Rich terminal output |
 
 ---
 

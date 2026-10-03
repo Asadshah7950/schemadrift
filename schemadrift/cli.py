@@ -12,6 +12,7 @@ from rich.table import Table
 from schemadrift.differ import SchemaDiffer
 from schemadrift.generator import MigrationGenerator
 from schemadrift.inspector import SchemaInspector
+from schemadrift.linter import SchemaLinter
 from schemadrift.models import SchemaSnapshot
 from schemadrift.reporter import (
     render_html_report,
@@ -302,3 +303,124 @@ def snapshot(dsn: str, output: str | None, compact: bool) -> None:
             sys.exit(1)
     else:
         click.echo(json_content)
+
+
+# ---------------------------------------------------------------------------
+# lint command
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.option(
+    "--source",
+    "-s",
+    "target_source",
+    default=None,
+    help="Database DSN or path to a JSON schema snapshot to lint.",
+)
+@click.option(
+    "--dsn",
+    default=None,
+    help="Database DSN to lint (alias for --source).",
+)
+@click.option(
+    "--file",
+    "-f",
+    "snapshot_file",
+    default=None,
+    help="Path to a JSON schema snapshot to lint (alias for --source).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    default="summary",
+    type=click.Choice(["summary", "json"]),
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--fail-on-warning",
+    "-W",
+    is_flag=True,
+    default=False,
+    help="Exit with status code 1 if any warnings are detected.",
+)
+@click.option(
+    "--fail-on-error/--no-fail-on-error",
+    default=True,
+    show_default=True,
+    help="Exit with status code 1 if errors (e.g. missing primary keys) are detected.",
+)
+@click.option(
+    "--exclude",
+    "-e",
+    "exclude_tables",
+    multiple=True,
+    help="Exclude specific tables from lint checks.",
+)
+def lint(
+    target_source: str | None,
+    dsn: str | None,
+    snapshot_file: str | None,
+    fmt: str,
+    fail_on_warning: bool,
+    fail_on_error: bool,
+    exclude_tables: tuple[str, ...],
+) -> None:
+    """Analyze a schema for anti-patterns, unindexed foreign keys, and missing keys."""
+    resolved_source = target_source or snapshot_file or dsn
+    if not resolved_source:
+        click.echo("Error: Must provide a schema source via --source, --dsn, or --file.", err=True)
+        sys.exit(1)
+
+    snap = _load_snapshot(resolved_source, label="lint target")
+    excluded_set = set(exclude_tables)
+    linter = SchemaLinter(snap, exclude_tables=excluded_set)
+    result = linter.lint()
+
+    if fmt == "json":
+        import json
+
+        click.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if not result.issues:
+            console.print(
+                "[bold green]✓ Schema is healthy! Zero anti-patterns detected.[/bold green]"
+            )
+        else:
+            table = Table(
+                title=f"Schema Lint Report ({len(result.issues)} issues found)",
+                show_header=True,
+                header_style="bold magenta",
+            )
+            table.add_column("Severity", justify="center", no_wrap=True)
+            table.add_column("Code", style="dim", no_wrap=True)
+            table.add_column("Table", style="cyan", no_wrap=True)
+            table.add_column("Message")
+            table.add_column("Recommendation", style="green")
+
+            for issue in result.issues:
+                sev_style = "bold red" if issue.severity == "ERROR" else "bold yellow"
+                table.add_row(
+                    f"[{sev_style}]{issue.severity}[/{sev_style}]",
+                    f"{issue.code} ({issue.rule})",
+                    issue.table,
+                    issue.message,
+                    issue.suggestion,
+                )
+
+            console.print(table)
+            summary_parts = []
+            if result.error_count:
+                summary_parts.append(f"[bold red]{result.error_count} error(s)[/bold red]")
+            if result.warning_count:
+                summary_parts.append(
+                    f"[bold yellow]{result.warning_count} warning(s)[/bold yellow]"
+                )
+            console.print(f"Summary: {', '.join(summary_parts)}")
+
+    if fail_on_error and result.has_errors:
+        sys.exit(1)
+
+    if fail_on_warning and result.has_warnings:
+        sys.exit(1)
