@@ -7,10 +7,10 @@ branding:
 
 inputs:
   source:
-    description: 'Source PostgreSQL database connection string (DSN).'
+    description: 'Source PostgreSQL database connection string (DSN) or JSON snapshot path.'
     required: true
   target:
-    description: 'Target PostgreSQL database connection string (DSN).'
+    description: 'Target PostgreSQL database connection string (DSN) or JSON snapshot path.'
     required: true
   format:
     description: 'Output format: sql, json, summary, markdown, html.'

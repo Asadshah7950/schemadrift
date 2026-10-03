@@ -102,6 +102,50 @@ class TestSchemaSnapshot:
         snap = SchemaSnapshot(tables={"users": t})
         assert "users" in snap.tables
 
+    def test_serialization_roundtrip(self, tmp_path) -> None:
+        col1 = ColumnDef(name="id", data_type="integer", nullable=False, is_primary_key=True)
+        col2 = ColumnDef(name="email", data_type="varchar(255)", default="'user@example.com'")
+        idx1 = IndexDef(name="idx_users_email", table="users", columns=["email"], unique=True)
+        tbl1 = TableDef(name="users", columns=[col1, col2], indexes=[idx1])
+        fk1 = ForeignKeyDef(
+            name="fk_orders_user",
+            table="orders",
+            columns=["user_id"],
+            ref_table="users",
+            ref_columns=["id"],
+            on_delete="CASCADE",
+        )
+        snap = SchemaSnapshot(
+            tables={"users": tbl1},
+            foreign_keys=[fk1],
+            enums={"user_status": ["active", "suspended", "deleted"]},
+        )
+
+        # 1. to_dict / from_dict
+        d = snap.to_dict()
+        assert d["version"] == "1.0"
+        assert "users" in d["tables"]
+        restored_from_dict = SchemaSnapshot.from_dict(d)
+        assert restored_from_dict.tables["users"].name == "users"
+        assert len(restored_from_dict.tables["users"].columns) == 2
+        assert restored_from_dict.tables["users"].columns[0].is_primary_key is True
+        assert restored_from_dict.tables["users"].indexes[0].unique is True
+        assert restored_from_dict.foreign_keys[0].on_delete == "CASCADE"
+        assert restored_from_dict.enums["user_status"] == ["active", "suspended", "deleted"]
+
+        # 2. to_json / from_json
+        j = snap.to_json()
+        assert '"version": "1.0"' in j
+        restored_from_json = SchemaSnapshot.from_json(j)
+        assert restored_from_json.to_dict() == d
+
+        # 3. to_file / from_file
+        file_path = tmp_path / "schema_snapshot.json"
+        snap.to_file(str(file_path))
+        assert file_path.exists()
+        restored_from_file = SchemaSnapshot.from_file(str(file_path))
+        assert restored_from_file.to_dict() == d
+
 
 class TestDiffResult:
     def test_initially_all_empty_lists(self) -> None:

@@ -1,7 +1,6 @@
 """CLI entry point for pg-schema-diff / schemadrift."""
 
-from __future__ import annotations
-
+import os
 import sys
 
 import click
@@ -11,6 +10,7 @@ from rich.table import Table
 from schemadrift.differ import SchemaDiffer
 from schemadrift.generator import MigrationGenerator
 from schemadrift.inspector import SchemaInspector
+from schemadrift.models import SchemaSnapshot
 from schemadrift.reporter import (
     render_html_report,
     render_json_report,
@@ -27,6 +27,26 @@ _diff_summary = render_summary_report
 _diff_to_markdown = render_markdown_report
 
 
+def _is_json_file(path_or_dsn: str) -> bool:
+    """Return True if the given string represents a local JSON snapshot file."""
+    return path_or_dsn.endswith(".json") or os.path.isfile(path_or_dsn)
+
+
+def _load_snapshot(path_or_dsn: str, label: str = "source") -> SchemaSnapshot:
+    """Load a SchemaSnapshot from either a local JSON file or a database connection DSN."""
+    if _is_json_file(path_or_dsn):
+        try:
+            return SchemaSnapshot.from_file(path_or_dsn)
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"Error reading {label} snapshot file '{path_or_dsn}': {exc}", err=True)
+            sys.exit(1)
+    try:
+        return SchemaInspector(path_or_dsn).snapshot()
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error connecting to {label} database: {exc}", err=True)
+        sys.exit(1)
+
+
 @click.group()
 @click.version_option()
 def main() -> None:
@@ -40,9 +60,15 @@ def main() -> None:
 
 @main.command()
 @click.option(
-    "--source", required=True, help="Source database DSN (e.g. postgres://user:pass@host/db)."
+    "--source",
+    required=True,
+    help="Source database DSN (e.g. postgres://...) or path to a JSON schema snapshot.",
 )
-@click.option("--target", required=True, help="Target database DSN.")
+@click.option(
+    "--target",
+    required=True,
+    help="Target database DSN or path to a JSON schema snapshot.",
+)
 @click.option(
     "--output", "-o", default=None, help="Write migration SQL or audit report to this file path."
 )
@@ -115,20 +141,22 @@ def diff(
 ) -> None:
     """Compare SOURCE and TARGET schemas and generate a migration script."""
     if output or fmt == "summary":
-        console.print("[bold blue]Inspecting source schema…[/bold blue]")
-    try:
-        src_snapshot = SchemaInspector(source).snapshot()
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Error connecting to source database: {exc}", err=True)
-        sys.exit(1)
+        src_label = (
+            f"Loading source snapshot from '{source}'…"
+            if _is_json_file(source)
+            else "Inspecting source schema…"
+        )
+        console.print(f"[bold blue]{src_label}[/bold blue]")
+    src_snapshot = _load_snapshot(source, label="source")
 
     if output or fmt == "summary":
-        console.print("[bold blue]Inspecting target schema…[/bold blue]")
-    try:
-        tgt_snapshot = SchemaInspector(target).snapshot()
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Error connecting to target database: {exc}", err=True)
-        sys.exit(1)
+        tgt_label = (
+            f"Loading target snapshot from '{target}'…"
+            if _is_json_file(target)
+            else "Inspecting target schema…"
+        )
+        console.print(f"[bold blue]{tgt_label}[/bold blue]")
+    tgt_snapshot = _load_snapshot(target, label="target")
 
     excluded_set = set(exclude_tables)
     if direction == "down":
@@ -187,14 +215,33 @@ def diff(
 
 
 @main.command()
-@click.option("--dsn", required=True, help="Database DSN to inspect.")
-def inspect(dsn: str) -> None:
-    """Inspect a PostgreSQL schema and print a summary table."""
-    try:
-        snapshot = SchemaInspector(dsn).snapshot()
-    except Exception as exc:  # noqa: BLE001
-        click.echo(f"Error connecting to database: {exc}", err=True)
+@click.option("--dsn", default=None, help="Database DSN to inspect.")
+@click.option(
+    "--file",
+    "-f",
+    "snapshot_file",
+    default=None,
+    help="Path to a JSON schema snapshot file to inspect.",
+)
+def inspect(dsn: str | None, snapshot_file: str | None) -> None:
+    """Inspect a PostgreSQL schema or saved JSON snapshot and print a summary table."""
+    if not dsn and not snapshot_file:
+        click.echo("Error: Must provide either --dsn or --file.", err=True)
         sys.exit(1)
+
+    if snapshot_file:
+        try:
+            snapshot = SchemaSnapshot.from_file(snapshot_file)
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"Error reading snapshot file '{snapshot_file}': {exc}", err=True)
+            sys.exit(1)
+    else:
+        assert dsn is not None
+        try:
+            snapshot = SchemaInspector(dsn).snapshot()
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"Error connecting to database: {exc}", err=True)
+            sys.exit(1)
 
     table = Table(title="Schema Summary", show_header=True, header_style="bold magenta")
     table.add_column("Table", style="cyan", no_wrap=True)
@@ -211,3 +258,45 @@ def inspect(dsn: str) -> None:
 
     if snapshot.foreign_keys:
         console.print(f"[bold]Foreign keys:[/bold] {len(snapshot.foreign_keys)}")
+
+
+# ---------------------------------------------------------------------------
+# snapshot command
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.option("--dsn", required=True, help="Database DSN to snapshot.")
+@click.option(
+    "--output", "-o", default=None, help="Write JSON snapshot to this file path."
+)
+@click.option(
+    "--compact",
+    is_flag=True,
+    default=False,
+    help="Emit minified JSON without indentation.",
+)
+def snapshot(dsn: str, output: str | None, compact: bool) -> None:
+    """Capture a complete schema snapshot as a portable JSON document."""
+    try:
+        snap = SchemaInspector(dsn).snapshot()
+    except Exception as exc:  # noqa: BLE001
+        click.echo(f"Error connecting to database: {exc}", err=True)
+        sys.exit(1)
+
+    indent = None if compact else 2
+    json_content = snap.to_json(indent=indent)
+
+    if output:
+        try:
+            with open(output, "w", encoding="utf-8") as fh:
+                fh.write(json_content)
+            console.print(
+                f"[green]Schema snapshot ({len(snap.tables)} tables, {len(snap.enums)} enums, "
+                f"{len(snap.foreign_keys)} FKs) written to {output}[/green]"
+            )
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"Error writing snapshot file '{output}': {exc}", err=True)
+            sys.exit(1)
+    else:
+        click.echo(json_content)

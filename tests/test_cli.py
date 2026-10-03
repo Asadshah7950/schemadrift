@@ -306,6 +306,114 @@ class TestInspectCommand:
             assert res.exit_code == 1
             assert "Error connecting to database" in res.output
 
+    def test_inspect_missing_options(self) -> None:
+        runner = CliRunner()
+        res = runner.invoke(main, ["inspect"])
+        assert res.exit_code == 1
+        assert "Error: Must provide either --dsn or --file." in res.output
+
+    def test_inspect_from_json_file(self, tmp_path) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot(
+            tables={"products": TableDef(name="products", columns=[ColumnDef("id", "int")])},
+            enums={"status": ["active"]},
+            foreign_keys=[ForeignKeyDef("fk1", "products", ["cat_id"], "categories", ["id"])],
+        )
+        file_path = tmp_path / "schema.json"
+        snap.to_file(str(file_path))
+
+        res = runner.invoke(main, ["inspect", "--file", str(file_path)])
+        assert res.exit_code == 0
+        assert "products" in res.output
+        assert "Enums (1): status" in res.output
+        assert "Foreign keys: 1" in res.output
+
+    def test_inspect_from_invalid_file(self) -> None:
+        runner = CliRunner()
+        res = runner.invoke(main, ["inspect", "--file", "nonexistent_file_12345.json"])
+        assert res.exit_code == 1
+        assert "Error reading snapshot file" in res.output
+
+
+class TestSnapshotCommand:
+    def test_snapshot_stdout(self) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot(
+            tables={"users": TableDef(name="users")},
+            enums={"role": ["admin", "member"]},
+        )
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.return_value = snap
+            res = runner.invoke(main, ["snapshot", "--dsn", "pg://db"])
+
+            assert res.exit_code == 0
+            data = json.loads(res.output)
+            assert data["version"] == "1.0"
+            assert "users" in data["tables"]
+            assert data["enums"]["role"] == ["admin", "member"]
+
+    def test_snapshot_to_output_file(self, tmp_path) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot(tables={"orders": TableDef(name="orders")})
+        out_file = tmp_path / "dump.json"
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.return_value = snap
+            res = runner.invoke(main, ["snapshot", "--dsn", "pg://db", "-o", str(out_file)])
+
+            assert res.exit_code == 0
+            assert "written to" in res.output
+            assert out_file.exists()
+            restored = SchemaSnapshot.from_file(str(out_file))
+            assert "orders" in restored.tables
+
+    def test_snapshot_compact(self) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot()
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.return_value = snap
+            res = runner.invoke(main, ["snapshot", "--dsn", "pg://db", "--compact"])
+
+            assert res.exit_code == 0
+            # Compact json shouldn't have indent spaces
+            assert '{\n  "version"' not in res.output
+
+    def test_snapshot_connection_error(self) -> None:
+        runner = CliRunner()
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = ConnectionError("Connection refused")
+            res = runner.invoke(main, ["snapshot", "--dsn", "pg://fail"])
+
+            assert res.exit_code == 1
+            assert "Error connecting to database" in res.output
+
+
+class TestDiffWithJsonFiles:
+    def test_diff_two_json_files(self, tmp_path) -> None:
+        runner = CliRunner()
+        src_snap = SchemaSnapshot(tables={"users": TableDef(name="users")})
+        tgt_snap = SchemaSnapshot(
+            tables={
+                "users": TableDef(name="users"),
+                "orders": TableDef(name="orders", columns=[ColumnDef("id", "int")]),
+            }
+        )
+        src_file = tmp_path / "src.json"
+        tgt_file = tmp_path / "tgt.json"
+        src_snap.to_file(str(src_file))
+        tgt_snap.to_file(str(tgt_file))
+
+        # Diffing without database connection!
+        res = runner.invoke(main, ["diff", "--source", str(src_file), "--target", str(tgt_file)])
+        assert res.exit_code == 0
+        assert 'CREATE TABLE "orders"' in res.output
+
+    def test_diff_source_file_error(self) -> None:
+        runner = CliRunner()
+        res = runner.invoke(main, ["diff", "--source", "nonexistent_src.json", "--target", "pg://tgt"])
+        assert res.exit_code == 1
+        assert "Error reading source snapshot file" in res.output
+
 
 class TestMarkdownFormatter:
     def test_markdown_no_drift(self) -> None:

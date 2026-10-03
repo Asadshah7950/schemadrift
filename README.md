@@ -18,7 +18,8 @@
 ## Features
 
 - 🔍 **Schema inspection** — Introspects live PostgreSQL databases via `psycopg2` (tables, columns, indexes, foreign keys, enums)
-- 🔄 **Drift detection** — Pure-Python diff engine with zero database dependency for the comparison step
+- 💾 **Portable JSON snapshots** — Capture schema snapshots with `snapshot --dsn ... -o schema.json` for Git versioning and offline audits
+- 🔄 **Offline & live drift detection** — Pure-Python diff engine comparing live databases, saved JSON snapshots, or mixed environments
 - 📝 **Safe SQL generation** — Produces `BEGIN`/`COMMIT`-wrapped migration scripts in the correct dependency order (drop FKs first, create tables before adding columns, etc.)
 - ⚡ **Zero-downtime migrations** — Native `--concurrently` support for `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`
 - 🛑 **Destructive change protection** — Safeguard production with `--fail-on-destructive` (`-w`) to exit with code 2 if dropped tables or columns are detected
@@ -196,13 +197,39 @@ schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --concurrently
+
+# Offline diff: compare a saved JSON snapshot against a live database or another snapshot
+schemadrift diff \
+  --source schema-prod.json \
+  --target "postgres://user:pass@staging-host/db"
+
+schemadrift diff \
+  --source schema-v1.json \
+  --target schema-v2.json
 ```
 
+### `snapshot` — Capture a portable JSON schema snapshot
+
+Export a complete, self-contained schema definition (tables, columns, types, indexes, FKs, enums) to a JSON document for Git versioning, compliance audit logs, or offline CI verification:
+
+```bash
+# Save formatted snapshot to disk
+schemadrift snapshot --dsn "postgres://user:pass@host/db" -o schema.json
+
+# Emit minified JSON to stdout
+schemadrift snapshot --dsn "postgres://user:pass@host/db" --compact
+```
 
 ### `inspect` — Print a schema overview
 
+Inspect a live database connection or an offline JSON snapshot file:
+
 ```bash
+# Inspect a live database
 schemadrift inspect --dsn "postgres://user:pass@host/db"
+
+# Inspect a saved schema snapshot file
+schemadrift inspect --file schema.json
 ```
 
 Output:
