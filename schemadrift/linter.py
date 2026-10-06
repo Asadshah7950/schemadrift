@@ -165,8 +165,9 @@ class SchemaLinter:
                             ),
                             columns=[col.name],
                             suggestion=(
-                                f"Use TEXT if truly unbounded, or VARCHAR(n) with an explicit "
-                                f"max length (e.g. VARCHAR(255)) to document the intended constraint."
+                                "Use TEXT if truly unbounded, or VARCHAR(n) with an"
+                                " explicit max length (e.g. VARCHAR(255)) to document"
+                                " the intended constraint."
                             ),
                         )
                     )
