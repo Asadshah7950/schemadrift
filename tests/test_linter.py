@@ -208,6 +208,66 @@ class TestSchemaLinter:
         assert data["warning_count"] == 0
         assert data["issues"][0]["code"] == "E001"
 
+    def test_filter_by_severity(self) -> None:
+        e_issue = LintIssue("E001", "missing-primary-key", "ERROR", "t", "msg")
+        w_issue = LintIssue("W001", "unindexed-foreign-key", "WARNING", "t", "msg")
+        result = LintResult(issues=[e_issue, w_issue])
+        assert result.filter_by_severity("ERROR") == [e_issue]
+        assert result.filter_by_severity("WARNING") == [w_issue]
+
+    def test_detects_varchar_without_length(self) -> None:
+        tbl = TableDef(
+            name="products",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                # bare VARCHAR with no length → should trigger W003
+                ColumnDef("name", "varchar"),
+                ColumnDef("description", "character varying"),
+                # VARCHAR(255) is fine — has explicit length, data_type includes length in name
+                ColumnDef("sku", "varchar(255)"),
+                ColumnDef("notes", "text"),  # TEXT is unbounded by design, not flagged
+            ],
+        )
+        snap = SchemaSnapshot(tables={"products": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+
+        w003_issues = [i for i in res.issues if i.code == "W003"]
+        assert len(w003_issues) == 2, f"Expected 2 W003 issues, got {len(w003_issues)}"
+        flagged_cols = {i.columns[0] for i in w003_issues}
+        assert flagged_cols == {"name", "description"}
+        assert all(i.rule == "varchar-without-length" for i in w003_issues)
+        assert all(i.severity == "WARNING" for i in w003_issues)
+        assert all("VARCHAR(n)" in i.suggestion for i in w003_issues)
+
+    def test_varchar_with_length_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="clean_table",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("label", "varchar(100)"),
+                ColumnDef("code", "character varying(50)"),
+                ColumnDef("body", "text"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"clean_table": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+        assert all(i.code != "W003" for i in res.issues)
+
+    def test_varchar_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy",
+            columns=[
+                ColumnDef("id", "int", is_primary_key=True),
+                ColumnDef("raw", "varchar"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy": tbl})
+        linter = SchemaLinter(snap, exclude_tables={"legacy"})
+        res = linter.lint()
+        assert len(res.issues) == 0
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:

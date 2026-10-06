@@ -47,6 +47,10 @@ class LintResult:
         """Total number of warnings."""
         return sum(1 for issue in self.issues if issue.severity == "WARNING")
 
+    def filter_by_severity(self, severity: str) -> list[LintIssue]:
+        """Return issues filtered by severity (e.g. 'ERROR' or 'WARNING')."""
+        return [i for i in self.issues if i.severity == severity]
+
     def to_dict(self) -> dict[str, Any]:
         """Convert lint result to dictionary for JSON output."""
         return {
@@ -140,6 +144,32 @@ class SchemaLinter:
                                 ),
                             )
                         )
+
+            # Rule W003: VARCHAR column without explicit length
+            # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
+            # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.
+            # Unbounded strings bypass application-layer size validation and can surprise
+            # engineers porting schemas to databases that enforce VARCHAR length strictly.
+            _UNBOUNDED_VARCHAR = {"character varying", "varchar"}
+            for col in tbl.columns:
+                if col.data_type.lower().strip() in _UNBOUNDED_VARCHAR:
+                    issues.append(
+                        LintIssue(
+                            code="W003",
+                            rule="varchar-without-length",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses VARCHAR "
+                                f"without an explicit length limit."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Use TEXT if truly unbounded, or VARCHAR(n) with an explicit "
+                                f"max length (e.g. VARCHAR(255)) to document the intended constraint."
+                            ),
+                        )
+                    )
 
         # 2. Foreign-key checks (unindexed foreign keys)
         # Foreign keys in PostgreSQL do not automatically create indexes on referencing columns.
