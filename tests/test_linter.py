@@ -268,6 +268,69 @@ class TestSchemaLinter:
         res = linter.lint()
         assert len(res.issues) == 0
 
+    def test_detects_nullable_boolean(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                # nullable boolean — should fire W004
+                ColumnDef("is_active", "boolean", nullable=True),
+                ColumnDef("is_admin", "BOOLEAN", nullable=True),
+                # NOT NULL boolean — should be fine
+                ColumnDef("is_verified", "boolean", nullable=False),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+
+        w004 = [i for i in res.issues if i.code == "W004"]
+        assert len(w004) == 2
+        flagged = {i.columns[0] for i in w004}
+        assert flagged == {"is_active", "is_admin"}
+        assert all(i.rule == "nullable-boolean" for i in w004)
+        assert all(i.severity == "WARNING" for i in w004)
+        assert all("NOT NULL DEFAULT" in i.suggestion for i in w004)
+
+    def test_non_nullable_boolean_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="settings",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("enabled", "boolean", nullable=False),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"settings": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W004" for i in res.issues)
+
+    def test_nullable_non_boolean_not_flagged_as_w004(self) -> None:
+        tbl = TableDef(
+            name="products",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                # nullable text and int are fine — only boolean is flagged
+                ColumnDef("description", "text", nullable=True),
+                ColumnDef("weight_g", "integer", nullable=True),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"products": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W004" for i in res.issues)
+
+    def test_nullable_boolean_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_flags",
+            columns=[
+                ColumnDef("id", "int", is_primary_key=True),
+                ColumnDef("active", "boolean", nullable=True),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_flags": tbl})
+        linter = SchemaLinter(snap, exclude_tables={"legacy_flags"})
+        res = linter.lint()
+        assert len(res.issues) == 0
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:

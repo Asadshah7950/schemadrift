@@ -212,4 +212,37 @@ class SchemaLinter:
                     )
                 )
 
+        # 3. Column-level checks (nullable booleans)
+        for tbl_name, tbl in sorted(self.snapshot.tables.items()):
+            if tbl_name in self.exclude_tables:
+                continue
+
+            for col in tbl.columns:
+                # Rule W004: Nullable BOOLEAN column
+                # SQL three-valued logic (TRUE / FALSE / NULL) on a BOOLEAN field
+                # causes subtle bugs: `WHERE active = TRUE` silently drops rows
+                # where active IS NULL. ORMs typically map BOOLEAN to a two-valued
+                # type, so a NULL slips through as None/null and triggers runtime
+                # errors or incorrect branching.  The fix is almost always
+                # `NOT NULL DEFAULT FALSE` (or TRUE for opt-in flags).
+                if col.data_type.lower().strip() == "boolean" and col.nullable:
+                    issues.append(
+                        LintIssue(
+                            code="W004",
+                            rule="nullable-boolean",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' is a"
+                                " nullable BOOLEAN -- SQL three-valued logic"
+                                " (TRUE/FALSE/NULL) can cause silent query bugs."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Add NOT NULL DEFAULT FALSE (or TRUE) to"
+                                f" '{col.name}' to enforce two-valued semantics."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)
