@@ -331,6 +331,55 @@ class TestSchemaLinter:
         res = linter.lint()
         assert len(res.issues) == 0
 
+    def test_detects_timestamp_without_timezone(self) -> None:
+        tbl = TableDef(
+            name="events",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("created_at", "timestamp"),
+                ColumnDef("updated_at", "timestamp without time zone"),
+                ColumnDef("published_at", "timestamptz"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"events": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+
+        w005 = [i for i in res.issues if i.code == "W005"]
+        assert len(w005) == 2
+        flagged = {i.columns[0] for i in w005}
+        assert flagged == {"created_at", "updated_at"}
+        assert all(i.rule == "timestamp-without-timezone" for i in w005)
+        assert all(i.severity == "WARNING" for i in w005)
+        assert all("TIMESTAMPTZ" in i.suggestion for i in w005)
+
+    def test_timestamptz_not_flagged_as_w005(self) -> None:
+        tbl = TableDef(
+            name="logs",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("created_at", "timestamptz"),
+                ColumnDef("synced_at", "timestamp with time zone"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"logs": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W005" for i in res.issues)
+
+    def test_timestamp_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="archived_events",
+            columns=[
+                ColumnDef("id", "int", is_primary_key=True),
+                ColumnDef("recorded_at", "timestamp"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"archived_events": tbl})
+        linter = SchemaLinter(snap, exclude_tables={"archived_events"})
+        res = linter.lint()
+        assert len(res.issues) == 0
+
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:

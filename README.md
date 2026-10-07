@@ -275,6 +275,9 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **E001** | `ERROR` | `missing-primary-key` | Table lacks a primary key. Causes full table rewrites during logical replication and risks duplicate rows. |
 | **W001** | `WARNING` | `unindexed-foreign-key` | Foreign key referencing columns lack a supporting prefix index. Causes sequential scans and table locks on parent table deletes/updates. |
 | **W002** | `WARNING` | `redundant-index` | Table has an index whose columns are a left-prefix of another index on the same table. Wastes disk space and write IOPS. |
+| **W003** | `WARNING` | `varchar-without-length` | Unbounded `VARCHAR` with no length limit. Bypasses constraints and behaves identically to `TEXT` without clarifying design intent. |
+| **W004** | `WARNING` | `nullable-boolean` | Nullable `BOOLEAN` column. Introduces SQL three-valued logic (`NULL`/`TRUE`/`FALSE`) leading to silent query filtering bugs. |
+| **W005** | `WARNING` | `timestamp-without-timezone` | `TIMESTAMP` without time zone. Omits UTC offset context, risking daylight saving and cross-region time conversion anomalies. |
 
 ---
 
@@ -287,7 +290,7 @@ For complete system design diagrams, DAG topological ordering specifications, an
 | [`schemadrift/models.py`](schemadrift/models.py) | Dataclasses for all schema objects (`ColumnDef`, `TableDef`, `IndexDef`, `ForeignKeyDef`, `SchemaSnapshot`, `DiffResult`) |
 | [`schemadrift/inspector.py`](schemadrift/inspector.py) | `SchemaInspector` — connects to PostgreSQL and builds a `SchemaSnapshot` using `information_schema` and `pg_catalog` queries |
 | [`schemadrift/differ.py`](schemadrift/differ.py) | `SchemaDiffer` — pure-Python comparison engine; no DB connection required |
-| [`schemadrift/linter.py`](schemadrift/linter.py) | `SchemaLinter` — static schema analysis engine detecting missing PKs, unindexed FKs, and redundant prefix indexes |
+| [`schemadrift/linter.py`](schemadrift/linter.py) | `SchemaLinter` — static schema analysis engine detecting missing PKs, unindexed FKs, redundant indexes, and column type anti-patterns |
 | [`schemadrift/generator.py`](schemadrift/generator.py) | `MigrationGenerator` — converts a `DiffResult` into safe, ordered SQL wrapped in a transaction |
 | [`schemadrift/cli.py`](schemadrift/cli.py) | Click CLI exposing `diff`, `snapshot`, `inspect`, and `lint` commands with Rich terminal output |
 

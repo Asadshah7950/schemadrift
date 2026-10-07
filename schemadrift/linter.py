@@ -245,4 +245,29 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W005: TIMESTAMP without time zone
+                # Storing timestamps without time zone information causes ambiguous
+                # conversions during daylight saving shifts and cross-region operations.
+                # PostgreSQL best practices strongly recommend TIMESTAMPTZ (timestamp
+                # with time zone) to store UTC points in time unambiguously.
+                _RAW_TIMESTAMP = {"timestamp", "timestamp without time zone"}
+                if col.data_type.lower().strip() in _RAW_TIMESTAMP:
+                    issues.append(
+                        LintIssue(
+                            code="W005",
+                            rule="timestamp-without-timezone",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses"
+                                " TIMESTAMP without time zone."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Use TIMESTAMPTZ (timestamp with time zone) for"
+                                f" '{col.name}' to store unambiguous UTC timestamps."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)
