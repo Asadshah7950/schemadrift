@@ -278,6 +278,7 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W003** | `WARNING` | `varchar-without-length` | Unbounded `VARCHAR` with no length limit. Bypasses constraints and behaves identically to `TEXT` without clarifying design intent. |
 | **W004** | `WARNING` | `nullable-boolean` | Nullable `BOOLEAN` column. Introduces SQL three-valued logic (`NULL`/`TRUE`/`FALSE`) leading to silent query filtering bugs. |
 | **W005** | `WARNING` | `timestamp-without-timezone` | `TIMESTAMP` without time zone. Omits UTC offset context, risking daylight saving and cross-region time conversion anomalies. |
+| **W006** | `WARNING` | `serial-instead-of-identity` | Legacy `SERIAL` pseudo-type. Violates SQL identity standards and risks sequence desynchronization. Use `GENERATED AS IDENTITY`. |
 
 ---
 

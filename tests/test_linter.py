@@ -379,6 +379,51 @@ class TestSchemaLinter:
         res = linter.lint()
         assert len(res.issues) == 0
 
+    def test_detects_serial_pseudo_types(self) -> None:
+        tbl = TableDef(
+            name="accounts",
+            columns=[
+                ColumnDef("id", "serial", is_primary_key=True),
+                ColumnDef("alt_id", "bigserial"),
+                ColumnDef("sub_id", "smallserial"),
+                ColumnDef("other_id", "bigint"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"accounts": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+
+        w006 = [i for i in res.issues if i.code == "W006"]
+        assert len(w006) == 3
+        flagged = {i.columns[0] for i in w006}
+        assert flagged == {"id", "alt_id", "sub_id"}
+        assert all(i.rule == "serial-instead-of-identity" for i in w006)
+        assert all(i.severity == "WARNING" for i in w006)
+        assert all("GENERATED ALWAYS AS IDENTITY" in i.suggestion for i in w006)
+
+    def test_identity_not_flagged_as_w006(self) -> None:
+        tbl = TableDef(
+            name="modern_accounts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("seq_num", "integer"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"modern_accounts": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W006" for i in res.issues)
+
+    def test_serial_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_serial",
+            columns=[ColumnDef("id", "serial", is_primary_key=True)],
+        )
+        snap = SchemaSnapshot(tables={"legacy_serial": tbl})
+        linter = SchemaLinter(snap, exclude_tables={"legacy_serial"})
+        res = linter.lint()
+        assert len(res.issues) == 0
+
+
 
 
 class TestLintCLICommand:

@@ -270,4 +270,28 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W006: Legacy SERIAL pseudo-type instead of IDENTITY
+                # PostgreSQL SERIAL/BIGSERIAL pseudo-types create implicit sequences
+                # that do not adhere to SQL standards and can desynchronize on manual inserts.
+                # PostgreSQL 10+ recommends GENERATED AS IDENTITY columns.
+                _SERIAL_TYPES = {"serial", "bigserial", "smallserial"}
+                if col.data_type.lower().strip() in _SERIAL_TYPES:
+                    issues.append(
+                        LintIssue(
+                            code="W006",
+                            rule="serial-instead-of-identity",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses"
+                                f" legacy '{col.data_type}' pseudo-type."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                "Use standard 'BIGINT GENERATED ALWAYS AS IDENTITY' (or"
+                                f" BY DEFAULT) for '{col.name}' instead of legacy SERIAL."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)
