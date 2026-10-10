@@ -423,6 +423,59 @@ class TestSchemaLinter:
         res = linter.lint()
         assert len(res.issues) == 0
 
+    def test_detects_redundant_unique_index_on_pk(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("email", "varchar(255)"),
+            ],
+            indexes=[
+                # backing pkey index (standard, not flagged)
+                IndexDef("users_pkey", "users", ["id"], unique=True),
+                # duplicate unique index on PK (redundant!)
+                IndexDef("uniq_users_pk_dupe", "users", ["id"], unique=True),
+                # unique on non-pk column (valid, not flagged)
+                IndexDef("uniq_users_email", "users", ["email"], unique=True),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+
+        w007 = [i for i in res.issues if i.code == "W007"]
+        assert len(w007) == 1
+        assert w007[0].rule == "redundant-unique-index-on-pk"
+        assert w007[0].table == "users"
+        assert "uniq_users_pk_dupe" in w007[0].message
+        assert w007[0].columns == ["id"]
+        assert "Drop redundant unique index" in w007[0].suggestion
+
+    def test_unique_on_non_pk_not_flagged_as_w007(self) -> None:
+        tbl = TableDef(
+            name="customers",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("uuid", "uuid"),
+            ],
+            indexes=[IndexDef("idx_cust_uuid", "customers", ["uuid"], unique=True)],
+        )
+        snap = SchemaSnapshot(tables={"customers": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W007" for i in res.issues)
+
+    def test_redundant_unique_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_pk",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+            indexes=[IndexDef("dupe_pk_idx", "legacy_pk", ["id"], unique=True)],
+        )
+        snap = SchemaSnapshot(tables={"legacy_pk": tbl})
+        linter = SchemaLinter(snap, exclude_tables={"legacy_pk"})
+        res = linter.lint()
+        assert len(res.issues) == 0
+
+
 
 
 

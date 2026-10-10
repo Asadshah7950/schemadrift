@@ -145,6 +145,32 @@ class SchemaLinter:
                             )
                         )
 
+            # Rule W007: Redundant unique index on primary key
+            # Primary keys in PostgreSQL automatically create a backing unique B-tree index.
+            # Defining a separate UNIQUE index on the exact primary key column(s) doubles
+            # index write overhead with zero query benefit.
+            pk_cols = [col.name for col in tbl.columns if col.is_primary_key]
+            if pk_cols:
+                for idx in tbl.indexes:
+                    if idx.unique and idx.columns == pk_cols and not idx.name.endswith("_pkey"):
+                        issues.append(
+                            LintIssue(
+                                code="W007",
+                                rule="redundant-unique-index-on-pk",
+                                severity="WARNING",
+                                table=tbl_name,
+                                message=(
+                                    f"Unique index '{idx.name}' on {pk_cols} is redundant with"
+                                    f" the primary key constraint on '{tbl_name}'."
+                                ),
+                                columns=pk_cols,
+                                suggestion=(
+                                    f"Drop redundant unique index '{idx.name}' as the primary"
+                                    " key already enforces uniqueness and creates a backing index."
+                                ),
+                            )
+                        )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.

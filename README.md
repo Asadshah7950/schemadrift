@@ -279,6 +279,7 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W004** | `WARNING` | `nullable-boolean` | Nullable `BOOLEAN` column. Introduces SQL three-valued logic (`NULL`/`TRUE`/`FALSE`) leading to silent query filtering bugs. |
 | **W005** | `WARNING` | `timestamp-without-timezone` | `TIMESTAMP` without time zone. Omits UTC offset context, risking daylight saving and cross-region time conversion anomalies. |
 | **W006** | `WARNING` | `serial-instead-of-identity` | Legacy `SERIAL` pseudo-type. Violates SQL identity standards and risks sequence desynchronization. Use `GENERATED AS IDENTITY`. |
+| **W007** | `WARNING` | `redundant-unique-index-on-pk` | Duplicate unique index on primary key. Primary keys already create a backing unique index; additional unique indexes on the PK waste write IOPS. |
 
 ---
 
