@@ -320,4 +320,28 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W008: Legacy JSON type instead of JSONB
+                # PostgreSQL offers two JSON data types: JSON and JSONB.
+                # Legacy JSON stores exact text, re-parsing on every query, and lacks
+                # GIN indexing and containment operators (@>, ?).
+                # JSONB stores pre-parsed binary, allows efficient indexing, and is faster.
+                if col.data_type.lower().strip() == "json":
+                    issues.append(
+                        LintIssue(
+                            code="W008",
+                            rule="json-instead-of-jsonb",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses"
+                                " legacy 'json' type instead of 'jsonb'."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Use 'jsonb' for '{col.name}' to enable binary storage,"
+                                " GIN indexing, containment queries (@>, ?), and faster execution."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)

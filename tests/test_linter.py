@@ -475,6 +475,53 @@ class TestSchemaLinter:
         res = linter.lint()
         assert len(res.issues) == 0
 
+    def test_detects_json_instead_of_jsonb(self) -> None:
+        tbl = TableDef(
+            name="events",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("payload", "json"),
+                ColumnDef("metadata", "JSON"),
+                ColumnDef("config", "jsonb"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"events": tbl})
+        linter = SchemaLinter(snap)
+        res = linter.lint()
+
+        w008 = [i for i in res.issues if i.code == "W008"]
+        assert len(w008) == 2
+        flagged = {i.columns[0] for i in w008}
+        assert flagged == {"payload", "metadata"}
+        assert all(i.rule == "json-instead-of-jsonb" for i in w008)
+        assert all(i.severity == "WARNING" for i in w008)
+        assert all("jsonb" in i.suggestion for i in w008)
+
+    def test_jsonb_not_flagged_as_w008(self) -> None:
+        tbl = TableDef(
+            name="documents",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("body", "jsonb"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"documents": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W008" for i in res.issues)
+
+    def test_json_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_audit",
+            columns=[
+                ColumnDef("id", "int", is_primary_key=True),
+                ColumnDef("raw_dump", "json"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_audit": tbl})
+        linter = SchemaLinter(snap, exclude_tables={"legacy_audit"})
+        res = linter.lint()
+        assert len(res.issues) == 0
+
 
 
 
