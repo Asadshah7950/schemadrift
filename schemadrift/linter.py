@@ -171,6 +171,48 @@ class SchemaLinter:
                             )
                         )
 
+            # Rule W009: Exact duplicate indexes
+            # Multiple indexes on the exact same columns and access method
+            # double write amplification with zero query benefit.
+            for i, idx1 in enumerate(tbl.indexes):
+                for j, idx2 in enumerate(tbl.indexes):
+                    if i >= j:
+                        continue
+                    if idx1.columns == idx2.columns and idx1.method == idx2.method:
+                        # Skip if already flagged under W007 (PK unique duplication)
+                        if pk_cols and idx1.columns == pk_cols and (idx1.unique or idx2.unique):
+                            continue
+
+                        # If one is unique and one is non-unique, the non-unique one is redundant
+                        if idx1.unique and not idx2.unique:
+                            dupe_idx = idx2
+                            orig_idx = idx1
+                        elif not idx1.unique and idx2.unique:
+                            dupe_idx = idx1
+                            orig_idx = idx2
+                        else:
+                            # Both unique or both non-unique: keep idx1, flag idx2
+                            dupe_idx = idx2
+                            orig_idx = idx1
+
+                        issues.append(
+                            LintIssue(
+                                code="W009",
+                                rule="duplicate-index",
+                                severity="WARNING",
+                                table=tbl_name,
+                                message=(
+                                    f"Index '{dupe_idx.name}' on {dupe_idx.columns} is an exact"
+                                    f" duplicate of index '{orig_idx.name}'."
+                                ),
+                                columns=dupe_idx.columns,
+                                suggestion=(
+                                    f"Drop duplicate index '{dupe_idx.name}' to save disk space"
+                                    " and write IOPS."
+                                ),
+                            )
+                        )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.

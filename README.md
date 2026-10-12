@@ -281,6 +281,7 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W006** | `WARNING` | `serial-instead-of-identity` | Legacy `SERIAL` pseudo-type. Violates SQL identity standards and risks sequence desynchronization. Use `GENERATED AS IDENTITY`. |
 | **W007** | `WARNING` | `redundant-unique-index-on-pk` | Duplicate unique index on primary key. Primary keys already create a backing unique index; additional unique indexes on the PK waste write IOPS. |
 | **W008** | `WARNING` | `json-instead-of-jsonb` | Legacy `json` data type. Stores raw text without GIN index support, containment operators (`@>`, `?`), or efficient binary lookups. Use `jsonb`. |
+| **W009** | `WARNING` | `duplicate-index` | Two or more indexes with identical column lists and access method. Wastes double the disk space and write IOPS on every write operation. |
 
 ---
 

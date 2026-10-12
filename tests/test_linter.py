@@ -522,6 +522,97 @@ class TestSchemaLinter:
         res = linter.lint()
         assert len(res.issues) == 0
 
+    def test_detects_duplicate_index(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("email", "varchar(255)"),
+            ],
+            indexes=[
+                IndexDef("idx_users_email", "users", ["email"]),
+                IndexDef("users_email_idx", "users", ["email"]),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        res = SchemaLinter(snap).lint()
+
+        w009 = [i for i in res.issues if i.code == "W009"]
+        assert len(w009) == 1
+        assert w009[0].rule == "duplicate-index"
+        assert w009[0].table == "users"
+        assert w009[0].columns == ["email"]
+        assert "users_email_idx" in w009[0].message
+        assert "idx_users_email" in w009[0].message
+
+    def test_detects_duplicate_index_unique_and_non_unique(self) -> None:
+        # Case 1: unique index defined first, non-unique second
+        tbl1 = TableDef(
+            name="accounts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("slug", "varchar(50)"),
+            ],
+            indexes=[
+                IndexDef("uniq_acc_slug", "accounts", ["slug"], unique=True),
+                IndexDef("idx_acc_slug", "accounts", ["slug"], unique=False),
+            ],
+        )
+        res1 = SchemaLinter(SchemaSnapshot(tables={"accounts": tbl1})).lint()
+        w009_1 = [i for i in res1.issues if i.code == "W009"]
+        assert len(w009_1) == 1
+        assert "idx_acc_slug" in w009_1[0].message
+        assert "uniq_acc_slug" in w009_1[0].message
+
+        # Case 2: non-unique index defined first, unique second
+        tbl2 = TableDef(
+            name="accounts2",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("slug", "varchar(50)"),
+            ],
+            indexes=[
+                IndexDef("idx_acc_slug2", "accounts2", ["slug"], unique=False),
+                IndexDef("uniq_acc_slug2", "accounts2", ["slug"], unique=True),
+            ],
+        )
+        res2 = SchemaLinter(SchemaSnapshot(tables={"accounts2": tbl2})).lint()
+        w009_2 = [i for i in res2.issues if i.code == "W009"]
+        assert len(w009_2) == 1
+        assert "idx_acc_slug2" in w009_2[0].message
+        assert "uniq_acc_slug2" in w009_2[0].message
+
+    def test_distinct_indexes_not_flagged_as_w009(self) -> None:
+        tbl = TableDef(
+            name="orders",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("customer_id", "bigint"),
+                ColumnDef("created_at", "timestamptz"),
+            ],
+            indexes=[
+                IndexDef("idx_orders_customer", "orders", ["customer_id"]),
+                IndexDef("idx_orders_created", "orders", ["created_at"]),
+                IndexDef("idx_orders_cust_created", "orders", ["customer_id", "created_at"]),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"orders": tbl})
+        res = SchemaLinter(snap).lint()
+        assert all(i.code != "W009" for i in res.issues)
+
+    def test_duplicate_index_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_cache",
+            columns=[ColumnDef("id", "int", is_primary_key=True), ColumnDef("k", "text")],
+            indexes=[
+                IndexDef("idx_1", "legacy_cache", ["k"]),
+                IndexDef("idx_2", "legacy_cache", ["k"]),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_cache": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_cache"}).lint()
+        assert len(res.issues) == 0
+
 
 
 
