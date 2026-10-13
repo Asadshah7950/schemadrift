@@ -386,4 +386,29 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W010: Unconstrained NUMERIC/DECIMAL column
+                # Using NUMERIC or DECIMAL without explicit precision and scale allows
+                # arbitrary numbers of digits (up to 131,072 digits before decimal, 16,383 after).
+                # In production schemas, this permits invalid values (e.g. 15 decimal places),
+                # breaks API contracts, and incurs storage overhead.
+                _UNCONSTRAINED_NUMERIC = {"numeric", "decimal"}
+                if col.data_type.lower().strip() in _UNCONSTRAINED_NUMERIC:
+                    issues.append(
+                        LintIssue(
+                            code="W010",
+                            rule="unconstrained-numeric",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses NUMERIC/DECIMAL"
+                                " without explicit precision and scale."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Define explicit precision and scale, e.g. 'NUMERIC(12, 2)'"
+                                f" for '{col.name}' or store currency as integer cents (BIGINT)."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)

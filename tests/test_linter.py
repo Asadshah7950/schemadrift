@@ -613,8 +613,56 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_cache"}).lint()
         assert len(res.issues) == 0
 
+    def test_detects_unconstrained_numeric(self) -> None:
+        tbl = TableDef(
+            name="accounts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("balance", "numeric"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"accounts": tbl})
+        res = SchemaLinter(snap).lint()
+        assert res.has_warnings is True
+        assert any(i.code == "W010" and i.rule == "unconstrained-numeric" for i in res.issues)
 
+    def test_detects_unconstrained_decimal(self) -> None:
+        tbl = TableDef(
+            name="products",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("price", "decimal"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"products": tbl})
+        res = SchemaLinter(snap).lint()
+        assert res.has_warnings is True
+        assert any(i.code == "W010" and i.rule == "unconstrained-numeric" for i in res.issues)
 
+    def test_constrained_numeric_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="products",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("price", "numeric(10, 2)"),
+                ColumnDef("tax", "decimal(5, 4)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"products": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W010" for i in res.issues)
+
+    def test_unconstrained_numeric_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_billing",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("amount", "numeric"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_billing": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_billing"}).lint()
+        assert not any(i.code == "W010" for i in res.issues)
 
 
 class TestLintCLICommand:
