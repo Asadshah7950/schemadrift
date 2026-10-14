@@ -282,6 +282,8 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W007** | `WARNING` | `redundant-unique-index-on-pk` | Duplicate unique index on primary key. Primary keys already create a backing unique index; additional unique indexes on the PK waste write IOPS. |
 | **W008** | `WARNING` | `json-instead-of-jsonb` | Legacy `json` data type. Stores raw text without GIN index support, containment operators (`@>`, `?`), or efficient binary lookups. Use `jsonb`. |
 | **W009** | `WARNING` | `duplicate-index` | Two or more indexes with identical column lists and access method. Wastes double the disk space and write IOPS on every write operation. |
+| **W010** | `WARNING` | `unconstrained-numeric` | Unconstrained `NUMERIC` or `DECIMAL` column without precision and scale limits. Incurs storage overhead and bypasses application boundary checks. |
+| **W011** | `WARNING` | `wide-table` | Table exceeds 50 columns. Incurs tuple fragmentation within PostgreSQL 8KB pages, TOAST overhead, and cache line misses during sequential scans. |
 
 ---
 

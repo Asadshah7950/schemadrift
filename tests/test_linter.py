@@ -664,6 +664,39 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_billing"}).lint()
         assert not any(i.code == "W010" for i in res.issues)
 
+    def test_detects_wide_table_over_50_columns(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True)] + [
+            ColumnDef(f"col_{i}", "varchar(50)") for i in range(1, 52)
+        ]
+        tbl = TableDef(name="wide_table", columns=cols)
+        snap = SchemaSnapshot(tables={"wide_table": tbl})
+        res = SchemaLinter(snap).lint()
+        assert res.has_warnings is True
+        w011 = [i for i in res.issues if i.code == "W011"]
+        assert len(w011) == 1
+        assert w011[0].rule == "wide-table"
+        assert w011[0].table == "wide_table"
+        assert "52 columns" in w011[0].message
+        assert len(w011[0].columns) == 5
+
+    def test_narrow_table_not_flagged_as_w011(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True)] + [
+            ColumnDef(f"col_{i}", "int") for i in range(1, 20)
+        ]
+        tbl = TableDef(name="narrow_table", columns=cols)
+        snap = SchemaSnapshot(tables={"narrow_table": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W011" for i in res.issues)
+
+    def test_wide_table_excluded_not_flagged(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True)] + [
+            ColumnDef(f"col_{i}", "text") for i in range(1, 55)
+        ]
+        tbl = TableDef(name="legacy_wide", columns=cols)
+        snap = SchemaSnapshot(tables={"legacy_wide": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_wide"}).lint()
+        assert not any(i.code == "W011" for i in res.issues)
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:

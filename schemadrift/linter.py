@@ -213,6 +213,32 @@ class SchemaLinter:
                             )
                         )
 
+            # Rule W011: Wide table anti-pattern (> 50 columns)
+            # PostgreSQL stores row tuples within 8 KB database pages. When a table
+            # exceeds 50 columns, row width increases tuple fragmentation, pushes fields
+            # into TOAST storage, and causes cache line misses during sequential scans.
+            # Normalization into 1:1 or 1:N relations or JSONB attributes is recommended.
+            _MAX_RECOMMENDED_COLUMNS = 50
+            if len(tbl.columns) > _MAX_RECOMMENDED_COLUMNS:
+                issues.append(
+                    LintIssue(
+                        code="W011",
+                        rule="wide-table",
+                        severity="WARNING",
+                        table=tbl_name,
+                        message=(
+                            f"Table '{tbl_name}' has {len(tbl.columns)} columns"
+                            f" (exceeds recommended {_MAX_RECOMMENDED_COLUMNS})."
+                        ),
+                        columns=[c.name for c in tbl.columns[:5]],
+                        suggestion=(
+                            "Consider normalizing table into 1:1 or 1:N relations"
+                            " or grouping optional attributes into a jsonb column"
+                            " to prevent tuple fragmentation and TOAST overhead."
+                        ),
+                    )
+                )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.
