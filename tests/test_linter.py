@@ -65,13 +65,13 @@ class TestSchemaLinter:
     def test_detects_unindexed_foreign_key(self) -> None:
         users = TableDef(
             name="users",
-            columns=[ColumnDef("id", "int", is_primary_key=True)],
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
         )
         orders = TableDef(
             name="orders",
             columns=[
-                ColumnDef("id", "int", is_primary_key=True),
-                ColumnDef("customer_id", "int"),
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("customer_id", "bigint"),
             ],
             indexes=[],  # No index on customer_id!
         )
@@ -94,16 +94,16 @@ class TestSchemaLinter:
         parent = TableDef(
             name="tenants",
             columns=[
-                ColumnDef("org_id", "int", is_primary_key=True),
-                ColumnDef("tenant_id", "int", is_primary_key=True),
+                ColumnDef("org_id", "bigint", is_primary_key=True),
+                ColumnDef("tenant_id", "bigint", is_primary_key=True),
             ],
         )
         child = TableDef(
             name="members",
             columns=[
-                ColumnDef("id", "int", is_primary_key=True),
-                ColumnDef("org_id", "int"),
-                ColumnDef("tenant_id", "int"),
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("org_id", "bigint"),
+                ColumnDef("tenant_id", "bigint"),
             ],
             # Left prefix covers the composite FK!
             indexes=[
@@ -696,6 +696,65 @@ class TestSchemaLinter:
         snap = SchemaSnapshot(tables={"legacy_wide": tbl})
         res = SchemaLinter(snap, exclude_tables={"legacy_wide"}).lint()
         assert not any(i.code == "W011" for i in res.issues)
+
+    def test_detects_32bit_integer_primary_key(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "integer", is_primary_key=True),
+                ColumnDef("name", "varchar(50)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        res = SchemaLinter(snap).lint()
+        assert res.has_warnings is True
+        w012 = [i for i in res.issues if i.code == "W012"]
+        assert len(w012) == 1
+        assert w012[0].rule == "integer-primary-key"
+        assert w012[0].table == "users"
+        assert w012[0].columns == ["id"]
+        assert "32-bit integer" in w012[0].message
+        assert "overflow risk" in w012[0].message
+
+    def test_detects_smallint_primary_key(self) -> None:
+        tbl = TableDef(
+            name="status_codes",
+            columns=[
+                ColumnDef("code", "smallint", is_primary_key=True),
+                ColumnDef("label", "text"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"status_codes": tbl})
+        res = SchemaLinter(snap).lint()
+        assert any(i.code == "W012" for i in res.issues)
+
+    def test_bigint_and_uuid_primary_key_not_flagged(self) -> None:
+        tbl_bigint = TableDef(
+            name="orders",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("total", "numeric(10,2)"),
+            ],
+        )
+        tbl_uuid = TableDef(
+            name="events",
+            columns=[
+                ColumnDef("id", "uuid", is_primary_key=True),
+                ColumnDef("name", "text"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"orders": tbl_bigint, "events": tbl_uuid})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W012" for i in res.issues)
+
+    def test_integer_primary_key_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_lookup",
+            columns=[ColumnDef("id", "serial", is_primary_key=True)],
+        )
+        snap = SchemaSnapshot(tables={"legacy_lookup": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_lookup"}).lint()
+        assert not any(i.code == "W012" for i in res.issues)
 
 
 class TestLintCLICommand:

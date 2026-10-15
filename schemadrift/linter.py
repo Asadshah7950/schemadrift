@@ -239,6 +239,40 @@ class SchemaLinter:
                     )
                 )
 
+            # Rule W012: 32-bit Integer Primary Key Overflow Risk
+            # In PostgreSQL, 32-bit signed integers (INT, INTEGER, INT4, SERIAL, SMALLINT)
+            # have a hard ceiling of 2,147,483,647 (or 32,767 for smallint). High-throughput
+            # transactional entities can exhaust this ceiling, causing sequence overflow and
+            # catastrophic write outages. BIGINT (BIGSERIAL, INT8) or UUIDv7 is recommended.
+            _32BIT_INT_TYPES = {
+                "int",
+                "integer",
+                "int4",
+                "serial",
+                "smallint",
+                "int2",
+                "smallserial",
+            }
+            for col in tbl.columns:
+                if col.is_primary_key and col.data_type.lower().strip() in _32BIT_INT_TYPES:
+                    issues.append(
+                        LintIssue(
+                            code="W012",
+                            rule="integer-primary-key",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Primary key column '{col.name}' on table '{tbl_name}' uses "
+                                f"32-bit integer type '{col.data_type}' (overflow risk)."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Migrate primary key '{col.name}' to 'bigint' (or 'bigserial') "
+                                "to prevent sequence wraparound and outage at 2.14B rows."
+                            ),
+                        )
+                    )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.
