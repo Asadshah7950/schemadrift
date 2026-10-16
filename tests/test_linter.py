@@ -756,6 +756,56 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_lookup"}).lint()
         assert not any(i.code == "W012" for i in res.issues)
 
+    def test_detects_too_many_indexes(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True)] + [
+            ColumnDef(f"c_{i}", "text") for i in range(1, 15)
+        ]
+        indexes = [
+            IndexDef(f"idx_orders_{i}", "orders", [f"c_{i}"]) for i in range(1, 12)
+        ]
+        tbl = TableDef(name="orders", columns=cols, indexes=indexes)
+        snap = SchemaSnapshot(tables={"orders": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w013 = [i for i in res.issues if i.code == "W013"]
+        assert len(w013) == 1
+        assert w013[0].rule == "too-many-indexes"
+        assert w013[0].table == "orders"
+        assert "11 indexes" in w013[0].message
+        assert len(w013[0].columns) == 5
+
+    def test_normal_index_count_not_flagged_as_w013(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True), ColumnDef("a", "int")]
+        indexes = [IndexDef(f"idx_{i}", "t", ["a"]) for i in range(5)]
+        tbl = TableDef(name="t", columns=cols, indexes=indexes)
+        snap = SchemaSnapshot(tables={"t": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W013" for i in res.issues)
+
+    def test_exactly_10_indexes_not_flagged(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True)] + [
+            ColumnDef(f"c_{i}", "int") for i in range(1, 12)
+        ]
+        indexes = [IndexDef(f"idx_{i}", "t", [f"c_{i}"]) for i in range(1, 11)]
+        tbl = TableDef(name="t", columns=cols, indexes=indexes)
+        snap = SchemaSnapshot(tables={"t": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W013" for i in res.issues)
+
+    def test_too_many_indexes_excluded_table_not_flagged(self) -> None:
+        cols = [ColumnDef("id", "bigint", is_primary_key=True)] + [
+            ColumnDef(f"c_{i}", "text") for i in range(1, 15)
+        ]
+        indexes = [
+            IndexDef(f"idx_heavy_{i}", "heavy_analytics", [f"c_{i}"])
+            for i in range(1, 13)
+        ]
+        tbl = TableDef(name="heavy_analytics", columns=cols, indexes=indexes)
+        snap = SchemaSnapshot(tables={"heavy_analytics": tbl})
+        res = SchemaLinter(snap, exclude_tables={"heavy_analytics"}).lint()
+        assert not any(i.code == "W013" for i in res.issues)
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:

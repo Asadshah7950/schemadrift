@@ -273,6 +273,32 @@ class SchemaLinter:
                         )
                     )
 
+            # Rule W013: Excessive indexes anti-pattern (> 10 indexes on a single table)
+            # In PostgreSQL, each additional index incurs write amplification on every
+            # INSERT, UPDATE, and DELETE. It also invalidates HOT (Heap-Only Tuples)
+            # optimizations when indexed columns are modified, increasing WAL volume and
+            # buffer cache churn. Consolidating into composite indexes is recommended.
+            _MAX_RECOMMENDED_INDEXES = 10
+            if len(tbl.indexes) > _MAX_RECOMMENDED_INDEXES:
+                issues.append(
+                    LintIssue(
+                        code="W013",
+                        rule="too-many-indexes",
+                        severity="WARNING",
+                        table=tbl_name,
+                        message=(
+                            f"Table '{tbl_name}' has {len(tbl.indexes)} indexes"
+                            f" (exceeds recommended {_MAX_RECOMMENDED_INDEXES})."
+                        ),
+                        columns=[idx.name for idx in tbl.indexes[:5]],
+                        suggestion=(
+                            "Review unused or low-selectivity indexes with pg_stat_user_indexes"
+                            " and consolidate single-column indexes into composite indexes"
+                            " to reduce write amplification and WAL overhead."
+                        ),
+                    )
+                )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.
