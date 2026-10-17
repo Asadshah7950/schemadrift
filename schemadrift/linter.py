@@ -497,4 +497,36 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W014: Fixed-length blank-padded CHAR type anti-pattern
+                # In PostgreSQL, CHAR(n) (blank-padded character, internal bpchar) does not provide
+                # any performance benefit over VARCHAR or TEXT (both use varlena storage). CHAR(n)
+                # pads strings with trailing spaces up to length n, which causes silent equality bugs
+                # (e.g. 'US ' != 'US' in some string operations), breaks regex matching, and wastes disk/WAL space.
+                # Using VARCHAR(n) or TEXT with a CHECK constraint is strongly recommended.
+                dtype_clean = col.data_type.lower().strip()
+                if (
+                    dtype_clean == "char"
+                    or dtype_clean == "character"
+                    or dtype_clean.startswith("char(")
+                    or dtype_clean.startswith("character(")
+                    or dtype_clean.startswith("bpchar")
+                ) and not dtype_clean.startswith("character varying"):
+                    issues.append(
+                        LintIssue(
+                            code="W014",
+                            rule="fixed-length-char",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses fixed-length "
+                                f"character type '{col.data_type}' (blank-padded)."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Use 'text' or 'varchar(n)' with a CHECK constraint for '{col.name}' "
+                                "instead of fixed-length 'char' to prevent space-padding bugs and unnecessary overhead."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)

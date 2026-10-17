@@ -806,6 +806,54 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"heavy_analytics"}).lint()
         assert not any(i.code == "W013" for i in res.issues)
 
+    def test_detects_fixed_length_char(self) -> None:
+        tbl = TableDef(
+            name="countries",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("code", "char(2)"),
+                ColumnDef("iso_code", "character(3)"),
+                ColumnDef("legacy_tag", "bpchar"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"countries": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w014_issues = [i for i in res.issues if i.code == "W014"]
+        assert len(w014_issues) == 3
+        assert all(i.rule == "fixed-length-char" for i in w014_issues)
+        assert all(i.table == "countries" for i in w014_issues)
+        flagged_cols = {i.columns[0] for i in w014_issues}
+        assert flagged_cols == {"code", "iso_code", "legacy_tag"}
+        assert "blank-padded" in w014_issues[0].message
+
+    def test_varchar_and_text_not_flagged_as_w014(self) -> None:
+        tbl = TableDef(
+            name="articles",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("title", "varchar(255)"),
+                ColumnDef("body", "text"),
+                ColumnDef("slug", "character varying(100)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"articles": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W014" for i in res.issues)
+
+    def test_fixed_length_char_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_iso",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("code", "char(2)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_iso": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_iso"}).lint()
+        assert not any(i.code == "W014" for i in res.issues)
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:
