@@ -500,8 +500,8 @@ class SchemaLinter:
                 # Rule W014: Fixed-length blank-padded CHAR type anti-pattern
                 # In PostgreSQL, CHAR(n) (blank-padded character, internal bpchar) does not provide
                 # any performance benefit over VARCHAR or TEXT (both use varlena storage). CHAR(n)
-                # pads strings with trailing spaces up to length n, which causes silent equality bugs
-                # (e.g. 'US ' != 'US' in some string operations), breaks regex matching, and wastes disk/WAL space.
+                # pads strings with trailing spaces up to length n, which causes silent equality
+                # bugs (e.g. 'US ' != 'US' in string operations) and wastes disk/WAL space.
                 # Using VARCHAR(n) or TEXT with a CHECK constraint is strongly recommended.
                 dtype_clean = col.data_type.lower().strip()
                 if (
@@ -523,8 +523,9 @@ class SchemaLinter:
                             ),
                             columns=[col.name],
                             suggestion=(
-                                f"Use 'text' or 'varchar(n)' with a CHECK constraint for '{col.name}' "
-                                "instead of fixed-length 'char' to prevent space-padding bugs and unnecessary overhead."
+                                f"Use 'text' or 'varchar(n)' with a CHECK constraint for "
+                                f"'{col.name}' instead of fixed-length 'char' to prevent "
+                                "space-padding bugs and unnecessary overhead."
                             ),
                         )
                     )
