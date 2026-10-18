@@ -530,4 +530,31 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W015: Discouraged PostgreSQL MONEY type
+                # In PostgreSQL, the 'money' type is strongly discouraged by the community:
+                # 1. Formatting and scale depend on the database locale (lc_monetary).
+                # 2. It does not store the currency code (e.g. USD, EUR, GBP).
+                # 3. Arithmetic operations suffer from floating-point rounding errors.
+                # Using 'numeric(p, s)' or storing integer cents ('bigint') with a separate
+                # ISO currency code column is the industry standard.
+                if col.data_type.lower().strip() == "money":
+                    issues.append(
+                        LintIssue(
+                            code="W015",
+                            rule="discouraged-money-type",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses the "
+                                "discouraged PostgreSQL 'money' type."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Migrate '{col.name}' to 'numeric(p, s)' or store integer "
+                                "cents ('bigint') with an ISO currency code column to prevent "
+                                "locale-dependent formatting and precision bugs."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)

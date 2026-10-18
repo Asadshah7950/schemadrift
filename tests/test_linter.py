@@ -854,6 +854,52 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_iso"}).lint()
         assert not any(i.code == "W014" for i in res.issues)
 
+    def test_detects_discouraged_money_type(self) -> None:
+        tbl = TableDef(
+            name="products",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("price", "money"),
+                ColumnDef("discount", "MONEY"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"products": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w015_issues = [i for i in res.issues if i.code == "W015"]
+        assert len(w015_issues) == 2
+        assert all(i.rule == "discouraged-money-type" for i in w015_issues)
+        assert all(i.table == "products" for i in w015_issues)
+        assert {i.columns[0] for i in w015_issues} == {"price", "discount"}
+        assert "discouraged" in w015_issues[0].message
+        assert "numeric(p, s)" in w015_issues[0].suggestion
+
+    def test_numeric_currency_not_flagged_as_w015(self) -> None:
+        tbl = TableDef(
+            name="orders",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("total", "numeric(12, 2)"),
+                ColumnDef("amount_cents", "bigint"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"orders": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W015" for i in res.issues)
+
+    def test_money_type_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_billing",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("amount", "money"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_billing": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_billing"}).lint()
+        assert not any(i.code == "W015" for i in res.issues)
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:
