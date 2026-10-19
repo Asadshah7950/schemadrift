@@ -900,6 +900,61 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_billing"}).lint()
         assert not any(i.code == "W015" for i in res.issues)
 
+    def test_detects_discouraged_char_type(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("country_code", "char(2)"),
+                ColumnDef("status_code", "character(5)"),
+                ColumnDef("legacy_tag", "bpchar(10)"),
+                ColumnDef("unpadded_char", "character"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w016_issues = [i for i in res.issues if i.code == "W016"]
+        assert len(w016_issues) == 4
+        assert all(i.rule == "discouraged-char-type" for i in w016_issues)
+        assert all(i.table == "users" for i in w016_issues)
+        assert {i.columns[0] for i in w016_issues} == {
+            "country_code",
+            "status_code",
+            "legacy_tag",
+            "unpadded_char",
+        }
+        assert "blank-padding" in w016_issues[0].message
+        assert "text" in w016_issues[0].suggestion
+
+    def test_varchar_text_not_flagged_as_w016(self) -> None:
+        tbl = TableDef(
+            name="accounts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("code", "varchar(2)"),
+                ColumnDef("desc", "text"),
+                ColumnDef("notes", "character varying(100)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"accounts": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W016" for i in res.issues)
+
+    def test_char_type_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_fixed",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("code", "char(2)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_fixed": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_fixed"}).lint()
+        assert not any(i.code == "W016" for i in res.issues)
+
+
 
 class TestLintCLICommand:
     def test_lint_missing_arguments(self) -> None:

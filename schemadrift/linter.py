@@ -557,4 +557,43 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W016: Discouraged PostgreSQL CHAR(n) / CHARACTER(n) type
+                # In PostgreSQL, fixed-length character types ('char', 'character', 'bpchar')
+                # pad strings with trailing spaces up to length n, wasting disk space and memory.
+                # Moreover, space-padding introduces subtle semantic comparison bugs
+                # (e.g. 'a ' == 'a') and provides zero performance benefit over 'varchar'/'text'.
+                # The official PostgreSQL Wiki ("Don't Do This") explicitly advises against char(n).
+                dt_clean = col.data_type.lower().strip()
+                is_fixed_char = (
+                    dt_clean in ("character", "char", "bpchar")
+                    or (
+                        (
+                            dt_clean.startswith("character(")
+                            or dt_clean.startswith("char(")
+                            or dt_clean.startswith("bpchar(")
+                        )
+                        and not dt_clean.startswith("character varying")
+                    )
+                )
+                if is_fixed_char:
+                    issues.append(
+                        LintIssue(
+                            code="W016",
+                            rule="discouraged-char-type",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses fixed-length "
+                                f"'{col.data_type}', which causes blank-padding and wastes storage."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Migrate '{col.name}' to 'text' (with optional CHECK "
+                                "constraint) or 'varchar(n)' to eliminate trailing "
+                                "space-padding overhead."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)
+
