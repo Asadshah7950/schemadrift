@@ -595,5 +595,32 @@ class SchemaLinter:
                         )
                     )
 
+                # Rule W017: Discouraged PostgreSQL TIMETZ / TIME WITH TIME ZONE type
+                # In PostgreSQL, the 'time with time zone' ('timetz') type is explicitly
+                # discouraged by both the official PostgreSQL documentation and community
+                # best practices ("Don't Do This"). Without an associated date component,
+                # daylight saving time (DST) shifts cannot be resolved, leading to
+                # ambiguous comparisons and erratic arithmetic across timezone transitions.
+                # Use 'timestamptz' (or store local 'time' without timezone) instead.
+                dt_timetz = col.data_type.lower().strip()
+                if dt_timetz in ("timetz", "time with time zone"):
+                    issues.append(
+                        LintIssue(
+                            code="W017",
+                            rule="discouraged-timetz-type",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses "
+                                f"discouraged '{col.data_type}' without date context."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Migrate '{col.name}' to 'timestamptz' (or 'time') "
+                                "to eliminate ambiguous daylight saving time offset calculations."
+                            ),
+                        )
+                    )
+
         return LintResult(issues=issues)
 

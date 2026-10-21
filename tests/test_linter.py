@@ -954,6 +954,52 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_fixed"}).lint()
         assert not any(i.code == "W016" for i in res.issues)
 
+    def test_timetz_type_flagged_as_w017(self) -> None:
+        tbl = TableDef(
+            name="schedules",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("start_time", "timetz"),
+                ColumnDef("end_time", "TIME WITH TIME ZONE"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"schedules": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w017_issues = [i for i in res.issues if i.code == "W017"]
+        assert len(w017_issues) == 2
+        assert all(i.rule == "discouraged-timetz-type" for i in w017_issues)
+        assert all(i.table == "schedules" for i in w017_issues)
+        assert {i.columns[0] for i in w017_issues} == {"start_time", "end_time"}
+        assert "timestamptz" in w017_issues[0].suggestion
+
+    def test_timestamptz_and_time_not_flagged_as_w017(self) -> None:
+        tbl = TableDef(
+            name="schedules",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("meeting_at", "timestamptz"),
+                ColumnDef("daily_alarm", "time"),
+                ColumnDef("alarm_slot", "time without time zone"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"schedules": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W017" for i in res.issues)
+
+    def test_timetz_type_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_schedules",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("start_time", "timetz"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_schedules": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_schedules"}).lint()
+        assert not any(i.code == "W017" for i in res.issues)
+
 
 
 class TestLintCLICommand:

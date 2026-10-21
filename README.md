@@ -286,6 +286,10 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W011** | `WARNING` | `wide-table` | Table exceeds 50 columns. Incurs tuple fragmentation within PostgreSQL 8KB pages, TOAST overhead, and cache line misses during sequential scans. |
 | **W012** | `WARNING` | `integer-primary-key` | Primary key column uses 32-bit integer (`int`/`serial`). Exceeding 2.14B rows triggers integer overflow and halts write operations. Use `bigint`. |
 | **W013** | `WARNING` | `too-many-indexes` | Table has more than 10 indexes. Excessive indexing degrades write performance, causes WAL amplification, and disables HOT optimization. |
+| **W014** | `WARNING` | `fixed-length-char` | Fixed-length `CHAR(n)` or `CHARACTER(n)` type. Pads strings with trailing whitespace, wasting storage and causing subtle equality comparison bugs. Use `VARCHAR(n)` or `TEXT`. |
+| **W015** | `WARNING` | `discouraged-money-type` | Legacy PostgreSQL `MONEY` type. Suffers from floating-point rounding errors, locale-dependent formatting (`lc_monetary`), and lacks ISO currency tags. Use `NUMERIC(p, s)` or integer cents. |
+| **W016** | `WARNING` | `discouraged-char-type` | Fixed-length `bpchar` / `char(n)` anti-pattern. Violates official PostgreSQL "Don't Do This" advice; provides zero performance advantage over `TEXT` while wasting disk/WAL space. |
+| **W017** | `WARNING` | `discouraged-timetz-type` | `TIME WITH TIME ZONE` (`TIMETZ`) without date context. Daylight saving time offsets cannot be resolved without date information, leading to erratic comparisons. Use `TIMESTAMPTZ`. |
 
 ---
 
