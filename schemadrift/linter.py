@@ -72,6 +72,112 @@ class LintResult:
         }
 
 
+POSTGRESQL_RESERVED_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "all",
+        "analyse",
+        "analyze",
+        "and",
+        "any",
+        "array",
+        "as",
+        "asc",
+        "asymmetric",
+        "authorization",
+        "binary",
+        "both",
+        "case",
+        "cast",
+        "check",
+        "collate",
+        "collation",
+        "column",
+        "concurrently",
+        "constraint",
+        "create",
+        "cross",
+        "current_catalog",
+        "current_date",
+        "current_role",
+        "current_schema",
+        "current_time",
+        "current_timestamp",
+        "current_user",
+        "default",
+        "deferrable",
+        "desc",
+        "distinct",
+        "do",
+        "else",
+        "end",
+        "except",
+        "false",
+        "fetch",
+        "for",
+        "foreign",
+        "freeze",
+        "from",
+        "full",
+        "grant",
+        "group",
+        "having",
+        "ilike",
+        "in",
+        "initially",
+        "inner",
+        "intersect",
+        "into",
+        "is",
+        "isnull",
+        "join",
+        "lateral",
+        "leading",
+        "left",
+        "like",
+        "limit",
+        "localtime",
+        "localtimestamp",
+        "natural",
+        "not",
+        "notnull",
+        "null",
+        "offset",
+        "on",
+        "only",
+        "or",
+        "order",
+        "outer",
+        "overlaps",
+        "placing",
+        "primary",
+        "references",
+        "returning",
+        "right",
+        "select",
+        "session_user",
+        "similar",
+        "some",
+        "symmetric",
+        "table",
+        "tablesample",
+        "then",
+        "to",
+        "trailing",
+        "true",
+        "union",
+        "unique",
+        "user",
+        "using",
+        "variadic",
+        "verbose",
+        "when",
+        "where",
+        "window",
+        "with",
+    }
+)
+
+
 class SchemaLinter:
     """Static analyzer for PostgreSQL schema health, performance, and best practices."""
 
@@ -618,6 +724,33 @@ class SchemaLinter:
                             suggestion=(
                                 f"Migrate '{col.name}' to 'timestamptz' (or 'time') "
                                 "to eliminate ambiguous daylight saving time offset calculations."
+                            ),
+                        )
+                    )
+
+                # Rule W018: Reserved keyword column name
+                # In PostgreSQL, using SQL reserved words (such as 'order', 'user', 'group',
+                # 'table', 'limit', 'column', 'select', 'where') as column identifiers requires
+                # double-quoting in every query, causing syntax errors with raw SQL queries,
+                # ORM mapping anomalies, and accidental keyword collisions.
+                col_name_lower = col.name.lower().strip()
+                if col_name_lower in POSTGRESQL_RESERVED_KEYWORDS:
+                    issues.append(
+                        LintIssue(
+                            code="W018",
+                            rule="reserved-keyword-column-name",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' uses PostgreSQL "
+                                f"reserved keyword '{col_name_lower}'."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Rename '{col.name}' to a descriptive non-reserved identifier "
+                                f"(e.g. '{col_name_lower}_name', '{tbl_name}_{col_name_lower}', "
+                                f"'{col_name_lower}_value') to eliminate mandatory double-quoting "
+                                "and syntax collisions in queries."
                             ),
                         )
                     )

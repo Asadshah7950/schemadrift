@@ -290,6 +290,7 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W015** | `WARNING` | `discouraged-money-type` | Legacy PostgreSQL `MONEY` type. Suffers from floating-point rounding errors, locale-dependent formatting (`lc_monetary`), and lacks ISO currency tags. Use `NUMERIC(p, s)` or integer cents. |
 | **W016** | `WARNING` | `discouraged-char-type` | Fixed-length `bpchar` / `char(n)` anti-pattern. Violates official PostgreSQL "Don't Do This" advice; provides zero performance advantage over `TEXT` while wasting disk/WAL space. |
 | **W017** | `WARNING` | `discouraged-timetz-type` | `TIME WITH TIME ZONE` (`TIMETZ`) without date context. Daylight saving time offsets cannot be resolved without date information, leading to erratic comparisons. Use `TIMESTAMPTZ`. |
+| **W018** | `WARNING` | `reserved-keyword-column-name` | Column uses a PostgreSQL reserved SQL keyword (`user`, `order`, `group`, `table`, `limit`). Requires mandatory double-quoting and triggers syntax errors in raw queries. |
 
 ---
 

@@ -1000,6 +1000,55 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_schedules"}).lint()
         assert not any(i.code == "W017" for i in res.issues)
 
+    def test_detects_reserved_keyword_column_names(self) -> None:
+        tbl = TableDef(
+            name="transactions",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("order", "bigint"),
+                ColumnDef("user", "text"),
+                ColumnDef("limit", "numeric(10, 2)"),
+                ColumnDef("group", "text"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"transactions": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w018_issues = [i for i in res.issues if i.code == "W018"]
+        assert len(w018_issues) == 4
+        assert all(i.rule == "reserved-keyword-column-name" for i in w018_issues)
+        assert all(i.table == "transactions" for i in w018_issues)
+        assert {i.columns[0] for i in w018_issues} == {"order", "user", "limit", "group"}
+        assert "Rename 'order'" in [i.suggestion for i in w018_issues if i.columns[0] == "order"][0]
+
+    def test_non_reserved_columns_not_flagged_as_w018(self) -> None:
+        tbl = TableDef(
+            name="orders",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("order_id", "bigint"),
+                ColumnDef("username", "text"),
+                ColumnDef("item_group", "text"),
+                ColumnDef("created_at", "timestamptz"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"orders": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W018" for i in res.issues)
+
+    def test_reserved_keyword_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_orders",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("order", "bigint"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_orders": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_orders"}).lint()
+        assert not any(i.code == "W018" for i in res.issues)
+
 
 
 class TestLintCLICommand:
