@@ -405,6 +405,38 @@ class SchemaLinter:
                     )
                 )
 
+            # Rule W019: Nullable column in unique index
+            # In PostgreSQL, NULL values are not considered equal (NULL != NULL).
+            # Therefore, standard UNIQUE indexes allow multiple duplicate rows containing
+            # NULL values. To enforce true uniqueness, the column should be marked NOT NULL,
+            # or defined with 'NULLS NOT DISTINCT' (PostgreSQL 15+).
+            cols_by_name = {col.name: col for col in tbl.columns}
+            for idx in tbl.indexes:
+                if not idx.unique:
+                    continue
+                if pk_cols and idx.columns == pk_cols:
+                    continue
+                for c_name in idx.columns:
+                    target_col = cols_by_name.get(c_name)
+                    if target_col and target_col.nullable and not target_col.is_primary_key:
+                        issues.append(
+                            LintIssue(
+                                code="W019",
+                                rule="nullable-column-in-unique-index",
+                                severity="WARNING",
+                                table=tbl_name,
+                                message=(
+                                    f"Column '{c_name}' in unique index '{idx.name}' on "
+                                    f"'{tbl_name}' is nullable (permits duplicate NULLs)."
+                                ),
+                                columns=[c_name],
+                                suggestion=(
+                                    f"Add 'NOT NULL' to '{c_name}' or use 'UNIQUE NULLS NOT "
+                                    "DISTINCT' (PG 15+) to prevent duplicate null rows."
+                                ),
+                            )
+                        )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.

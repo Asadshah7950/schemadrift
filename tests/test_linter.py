@@ -17,7 +17,7 @@ class TestSchemaLinter:
             name="users",
             columns=[
                 ColumnDef("id", "bigint", is_primary_key=True),
-                ColumnDef("email", "varchar(255)"),
+                ColumnDef("email", "varchar(255)", nullable=False),
             ],
             indexes=[IndexDef("idx_users_email", "users", ["email"], unique=True)],
         )
@@ -1048,6 +1048,88 @@ class TestSchemaLinter:
         snap = SchemaSnapshot(tables={"legacy_orders": tbl})
         res = SchemaLinter(snap, exclude_tables={"legacy_orders"}).lint()
         assert not any(i.code == "W018" for i in res.issues)
+
+    def test_detects_nullable_column_in_unique_index(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("email", "text", nullable=True),
+                ColumnDef("username", "text", nullable=False),
+            ],
+            indexes=[
+                IndexDef("idx_users_email", "users", ["email"], unique=True),
+                IndexDef("idx_users_username", "users", ["username"], unique=True),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w019_issues = [i for i in res.issues if i.code == "W019"]
+        assert len(w019_issues) == 1
+        assert w019_issues[0].rule == "nullable-column-in-unique-index"
+        assert w019_issues[0].table == "users"
+        assert w019_issues[0].columns == ["email"]
+        assert "idx_users_email" in w019_issues[0].message
+        assert "NOT NULL" in w019_issues[0].suggestion
+        assert "NULLS NOT DISTINCT" in w019_issues[0].suggestion
+
+    def test_detects_nullable_column_in_composite_unique_index(self) -> None:
+        tbl = TableDef(
+            name="tenant_members",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("tenant_id", "bigint", nullable=False),
+                ColumnDef("invite_code", "text", nullable=True),
+            ],
+            indexes=[
+                IndexDef(
+                    "idx_tenant_invite",
+                    "tenant_members",
+                    ["tenant_id", "invite_code"],
+                    unique=True,
+                ),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"tenant_members": tbl})
+        res = SchemaLinter(snap).lint()
+
+        w019_issues = [i for i in res.issues if i.code == "W019"]
+        assert len(w019_issues) == 1
+        assert w019_issues[0].columns == ["invite_code"]
+
+    def test_non_unique_or_not_null_indexes_not_flagged_as_w019(self) -> None:
+        tbl = TableDef(
+            name="profiles",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("slug", "text", nullable=False),
+                ColumnDef("bio", "text", nullable=True),
+            ],
+            indexes=[
+                IndexDef("idx_profiles_slug", "profiles", ["slug"], unique=True),
+                IndexDef("idx_profiles_bio", "profiles", ["bio"], unique=False),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"profiles": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W019" for i in res.issues)
+
+    def test_nullable_unique_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("email", "text", nullable=True),
+            ],
+            indexes=[
+                IndexDef("idx_legacy_email", "legacy_users", ["email"], unique=True),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_users": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_users"}).lint()
+        assert not any(i.code == "W019" for i in res.issues)
 
 
 
