@@ -1131,6 +1131,82 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_users"}).lint()
         assert not any(i.code == "W019" for i in res.issues)
 
+    def test_detects_discouraged_float_type_on_financial_columns(self) -> None:
+        tbl = TableDef(
+            name="transactions",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("amount", "real"),
+                ColumnDef("unit_price", "double precision"),
+                ColumnDef("total_cost", "float4"),
+                ColumnDef("account_balance", "float8"),
+                ColumnDef("shipping_fee", "float"),
+                ColumnDef("unitprice", "float(24)"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"transactions": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w020_issues = [i for i in res.issues if i.code == "W020"]
+        assert len(w020_issues) == 6
+        assert all(i.rule == "discouraged-float-type" for i in w020_issues)
+        assert all(i.table == "transactions" for i in w020_issues)
+        flagged_cols = {i.columns[0] for i in w020_issues}
+        assert flagged_cols == {
+            "amount",
+            "unit_price",
+            "total_cost",
+            "account_balance",
+            "shipping_fee",
+            "unitprice",
+        }
+        assert "inexact floating-point type" in w020_issues[0].message
+        assert "numeric(precision, scale)" in w020_issues[0].suggestion
+        assert "IEEE 754" in w020_issues[0].suggestion
+
+    def test_scientific_floats_not_flagged_as_w020(self) -> None:
+        tbl = TableDef(
+            name="sensor_readings",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("latitude", "double precision"),
+                ColumnDef("longitude", "double precision"),
+                ColumnDef("temperature", "real"),
+                ColumnDef("humidity_ratio", "float"),
+                ColumnDef("vector_score", "float4"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"sensor_readings": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W020" for i in res.issues)
+
+    def test_financial_numeric_not_flagged_as_w020(self) -> None:
+        tbl = TableDef(
+            name="invoices",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("subtotal", "numeric(12, 2)"),
+                ColumnDef("tax_amount", "numeric(10, 2)"),
+                ColumnDef("total_cents", "bigint"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"invoices": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W020" for i in res.issues)
+
+    def test_float_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_billing",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("price", "float8"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_billing": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_billing"}).lint()
+        assert not any(i.code == "W020" for i in res.issues)
+
 
 
 class TestLintCLICommand:

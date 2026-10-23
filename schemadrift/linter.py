@@ -177,6 +177,24 @@ POSTGRESQL_RESERVED_KEYWORDS: frozenset[str] = frozenset(
     }
 )
 
+FINANCIAL_COLUMN_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "amount",
+        "balance",
+        "cost",
+        "discount",
+        "fee",
+        "payment",
+        "price",
+        "revenue",
+        "salary",
+        "subtotal",
+        "tax",
+        "total",
+        "wage",
+    }
+)
+
 
 class SchemaLinter:
     """Static analyzer for PostgreSQL schema health, performance, and best practices."""
@@ -786,6 +804,55 @@ class SchemaLinter:
                             ),
                         )
                     )
+
+                # Rule W020: Discouraged floating-point type for monetary/financial columns
+                # In PostgreSQL, 'real' (float4) and 'double precision' (float8) are inexact
+                # IEEE 754 floating-point types. Using floating-point types for monetary,
+                # financial, or accounting columns causes binary floating-point rounding
+                # errors (e.g. 0.1 + 0.2 != 0.3) and reconciliation failures.
+                # Use 'numeric(precision, scale)' for exact decimal calculations or store
+                # integer minor currency units (cents) as 'bigint'.
+                dt_float = col.data_type.lower().strip()
+                is_float_type = (
+                    dt_float in ("real", "float4", "float8", "double precision", "float")
+                    or dt_float.startswith("float(")
+                )
+                if is_float_type:
+                    col_parts = set(col_name_lower.split("_"))
+                    is_financial = bool(col_parts & FINANCIAL_COLUMN_KEYWORDS) or any(
+                        col_name_lower.endswith(kw)
+                        for kw in (
+                            "price",
+                            "amount",
+                            "balance",
+                            "cost",
+                            "salary",
+                            "subtotal",
+                            "payment",
+                            "discount",
+                            "revenue",
+                        )
+                    )
+                    if is_financial:
+                        issues.append(
+                            LintIssue(
+                                code="W020",
+                                rule="discouraged-float-type",
+                                severity="WARNING",
+                                table=tbl_name,
+                                message=(
+                                    f"Column '{col.name}' on table '{tbl_name}' uses "
+                                    f"inexact floating-point type '{col.data_type}' for "
+                                    "financial/monetary data."
+                                ),
+                                columns=[col.name],
+                                suggestion=(
+                                    f"Migrate '{col.name}' to 'numeric(precision, scale)' for "
+                                    "exact decimal arithmetic, or store integer minor currency "
+                                    "units (cents) as 'bigint' to prevent IEEE 754 rounding errors."
+                                ),
+                            )
+                        )
 
         return LintResult(issues=issues)
 
