@@ -293,6 +293,7 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W018** | `WARNING` | `reserved-keyword-column-name` | Column uses a PostgreSQL reserved SQL keyword (`user`, `order`, `group`, `table`, `limit`). Requires mandatory double-quoting and triggers syntax errors in raw queries. |
 | **W019** | `WARNING` | `nullable-column-in-unique-index` | Column in a `UNIQUE` index is nullable. In standard SQL, `NULL != NULL`, allowing duplicate rows with null values unless marked `NOT NULL` or defined with `NULLS NOT DISTINCT` (PG 15+). |
 | **W020** | `WARNING` | `discouraged-float-type` | Inexact floating-point type (`float`, `real`, `double precision`) used on monetary/financial column. Causes IEEE 754 binary rounding errors (e.g. `0.1 + 0.2 != 0.3`). Use `NUMERIC(p, s)` or integer cents. |
+| **W021** | `WARNING` | `case-sensitive-column-name` | Column identifier contains uppercase characters (`userId`, `createdAt`). PostgreSQL folds unquoted identifiers to lowercase, mandating double-quoting and triggering `column does not exist` errors in raw queries. Use lowercase `snake_case`. |
 
 ---
 

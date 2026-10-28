@@ -1207,6 +1207,58 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_billing"}).lint()
         assert not any(i.code == "W020" for i in res.issues)
 
+    def test_detects_case_sensitive_column_names(self) -> None:
+        tbl = TableDef(
+            name="accounts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("userId", "bigint"),
+                ColumnDef("CreatedAt", "timestamptz"),
+                ColumnDef("orderTotal", "numeric(10, 2)"),
+                ColumnDef("isVIPCustomer", "boolean"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"accounts": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w021_issues = [i for i in res.issues if i.code == "W021"]
+        assert len(w021_issues) == 4
+        assert all(i.rule == "case-sensitive-column-name" for i in w021_issues)
+        assert all(i.table == "accounts" for i in w021_issues)
+        flagged_cols = {i.columns[0] for i in w021_issues}
+        assert flagged_cols == {"userId", "CreatedAt", "orderTotal", "isVIPCustomer"}
+        assert "uppercase characters requiring mandatory double-quoting" in w021_issues[0].message
+        assert "user_id" in [i.suggestion for i in w021_issues if i.columns[0] == "userId"][0]
+        assert "created_at" in [i.suggestion for i in w021_issues if i.columns[0] == "CreatedAt"][0]
+
+    def test_lowercase_snake_case_columns_not_flagged_as_w021(self) -> None:
+        tbl = TableDef(
+            name="users",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("user_id", "bigint"),
+                ColumnDef("created_at", "timestamptz"),
+                ColumnDef("order_total", "numeric(10, 2)"),
+                ColumnDef("is_vip_customer", "boolean"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"users": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W021" for i in res.issues)
+
+    def test_w021_excluded_table_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_accounts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("legacyUserId", "bigint"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_accounts": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_accounts"}).lint()
+        assert not any(i.code == "W021" for i in res.issues)
+
 
 
 class TestLintCLICommand:

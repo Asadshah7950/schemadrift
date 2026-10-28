@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -853,6 +854,34 @@ class SchemaLinter:
                                 ),
                             )
                         )
+
+                # Rule W021: Case-sensitive column name with uppercase characters
+                # In PostgreSQL, unquoted identifiers are automatically folded to lower case.
+                # Creating a column with uppercase or mixed-case characters (e.g. 'userId',
+                # 'createdAt', 'orderTotal') requires double-quoting in every query ("userId").
+                # Omitting quotes causes PostgreSQL to look for the lowercased name ('userid'),
+                # triggering runtime 'column does not exist' errors in queries and ORM mappings.
+                # Use standard lowercase snake_case instead.
+                if any(c.isupper() for c in col.name):
+                    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", col.name)
+                    snake_name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+                    issues.append(
+                        LintIssue(
+                            code="W021",
+                            rule="case-sensitive-column-name",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=(
+                                f"Column '{col.name}' on table '{tbl_name}' contains uppercase "
+                                "characters requiring mandatory double-quoting in PostgreSQL."
+                            ),
+                            columns=[col.name],
+                            suggestion=(
+                                f"Rename '{col.name}' to lowercase snake_case '{snake_name}' "
+                                "to prevent case-folding errors and avoid quoted identifiers."
+                            ),
+                        )
+                    )
 
         return LintResult(issues=issues)
 
