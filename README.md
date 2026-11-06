@@ -13,6 +13,11 @@
   <img src="docs/assets/demo.svg" alt="schemadrift terminal demo" width="100%">
 </p>
 
+<p align="center">
+  <a href="docs/schemadrift_case_study.pdf"><b>📄 Read the Engineering Case Study (PDF)</b></a> •
+  <a href="docs/ARCHITECTURE.md"><b>🏛️ Architecture Deep Dive</b></a>
+</p>
+
 ---
 
 ## Features
