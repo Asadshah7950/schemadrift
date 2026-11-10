@@ -1259,6 +1259,68 @@ class TestSchemaLinter:
         res = SchemaLinter(snap, exclude_tables={"legacy_accounts"}).lint()
         assert not any(i.code == "W021" for i in res.issues)
 
+    def test_detects_missing_default_on_audit_timestamp_columns(self) -> None:
+        tbl = TableDef(
+            name="posts",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("title", "text"),
+                ColumnDef("created_at", "timestamptz"),
+                ColumnDef("created_on", "timestamp"),
+                ColumnDef("inserted_at", "timestamptz"),
+                ColumnDef("author_created_at", "timestamp with time zone"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"posts": tbl})
+        res = SchemaLinter(snap).lint()
+
+        assert res.has_warnings is True
+        w022_issues = [i for i in res.issues if i.code == "W022"]
+        assert len(w022_issues) == 4
+        assert all(i.rule == "missing-default-on-audit-timestamp" for i in w022_issues)
+        assert all(i.table == "posts" for i in w022_issues)
+        flagged_cols = {i.columns[0] for i in w022_issues}
+        assert flagged_cols == {"created_at", "created_on", "inserted_at", "author_created_at"}
+        assert "lacks a default timestamp expression" in w022_issues[0].message
+        assert "DEFAULT now()" in w022_issues[0].suggestion
+
+    def test_audit_timestamp_with_default_not_flagged_as_w022(self) -> None:
+        tbl = TableDef(
+            name="events",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("created_at", "timestamptz", default="now()"),
+                ColumnDef("created_on", "timestamp", default="CURRENT_TIMESTAMP"),
+                ColumnDef("inserted_at", "timestamptz", default="clock_timestamp()"),
+                ColumnDef("status", "text", default="'draft'"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"events": tbl})
+        res = SchemaLinter(snap).lint()
+        assert not any(i.code == "W022" for i in res.issues)
+
+    def test_w022_excluded_table_and_non_timestamp_not_flagged(self) -> None:
+        tbl = TableDef(
+            name="legacy_records",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("created_at", "timestamptz"),
+            ],
+        )
+        snap = SchemaSnapshot(tables={"legacy_records": tbl})
+        res = SchemaLinter(snap, exclude_tables={"legacy_records"}).lint()
+        assert not any(i.code == "W022" for i in res.issues)
+
+        tbl_non_ts = TableDef(
+            name="logs",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("created_at", "varchar(50)"),  # string, not timestamp
+            ],
+        )
+        res2 = SchemaLinter(SchemaSnapshot(tables={"logs": tbl_non_ts})).lint()
+        assert not any(i.code == "W022" for i in res2.issues)
+
 
 
 class TestLintCLICommand:

@@ -196,6 +196,17 @@ FINANCIAL_COLUMN_KEYWORDS: frozenset[str] = frozenset(
     }
 )
 
+AUDIT_TIMESTAMP_COLUMN_NAMES: frozenset[str] = frozenset(
+    {
+        "created_at",
+        "created_on",
+        "creation_time",
+        "inserted_at",
+        "registered_at",
+        "created_time",
+    }
+)
+
 
 class SchemaLinter:
     """Static analyzer for PostgreSQL schema health, performance, and best practices."""
@@ -882,6 +893,39 @@ class SchemaLinter:
                             ),
                         )
                     )
+
+                # Rule W022: Missing default value on audit timestamp column
+                # Audit timestamp columns such as 'created_at', 'created_on', 'inserted_at',
+                # 'registered_at', or 'creation_time' represent record creation timestamps.
+                # If defined without an automated default expression (e.g. DEFAULT CURRENT_TIMESTAMP,
+                # DEFAULT now(), or DEFAULT clock_timestamp()), every INSERT must manually supply
+                # the timestamp. Any insert that omits the column either fails with a NOT NULL
+                # violation or sets the audit column to NULL.
+                # Always specify 'DEFAULT now()' or 'DEFAULT CURRENT_TIMESTAMP'.
+                if (
+                    col_name_lower in AUDIT_TIMESTAMP_COLUMN_NAMES
+                    or col_name_lower.endswith("_created_at")
+                ):
+                    dt_ts = col.data_type.lower().strip()
+                    if "timestamp" in dt_ts:
+                        if col.default is None or not str(col.default).strip():
+                            issues.append(
+                                LintIssue(
+                                    code="W022",
+                                    rule="missing-default-on-audit-timestamp",
+                                    severity="WARNING",
+                                    table=tbl_name,
+                                    message=(
+                                        f"Audit timestamp column '{col.name}' on table '{tbl_name}' "
+                                        "lacks a default timestamp expression (e.g. 'DEFAULT now()')."
+                                    ),
+                                    columns=[col.name],
+                                    suggestion=(
+                                        f"Add 'DEFAULT now()' or 'DEFAULT CURRENT_TIMESTAMP' to '{col.name}' "
+                                        "so row creation timestamps are automatically populated by PostgreSQL."
+                                    ),
+                                )
+                            )
 
         return LintResult(issues=issues)
 
