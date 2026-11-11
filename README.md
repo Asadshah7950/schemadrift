@@ -300,6 +300,7 @@ schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_
 | **W020** | `WARNING` | `discouraged-float-type` | Inexact floating-point type (`float`, `real`, `double precision`) used on monetary/financial column. Causes IEEE 754 binary rounding errors (e.g. `0.1 + 0.2 != 0.3`). Use `NUMERIC(p, s)` or integer cents. |
 | **W021** | `WARNING` | `case-sensitive-column-name` | Column identifier contains uppercase characters (`userId`, `createdAt`). PostgreSQL folds unquoted identifiers to lowercase, mandating double-quoting and triggering `column does not exist` errors in raw queries. Use lowercase `snake_case`. |
 | **W022** | `WARNING` | `missing-default-on-audit-timestamp` | Audit timestamp column (`created_at`, `created_on`, `inserted_at`) lacks an automated default expression. Omitting the column during `INSERT` either causes `NOT NULL` violations or stores `NULL`. Use `DEFAULT now()` or `DEFAULT CURRENT_TIMESTAMP`. |
+| **W023** | `WARNING` | `low-cardinality-boolean-index` | Non-unique single-column B-tree index targets a `boolean` column. Low selectivity (~50%) causes the planner to bypass the index while writes incur WAL and VACUUM overhead. Use a partial index (`WHERE col IS TRUE`) or composite index. |
 
 ---
 

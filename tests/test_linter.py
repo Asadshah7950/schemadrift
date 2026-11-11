@@ -1321,6 +1321,63 @@ class TestSchemaLinter:
         res2 = SchemaLinter(SchemaSnapshot(tables={"logs": tbl_non_ts})).lint()
         assert not any(i.code == "W022" for i in res2.issues)
 
+    def test_detects_low_cardinality_boolean_index(self) -> None:
+        tbl = TableDef(
+            name="feature_flags",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("is_active", "boolean", nullable=False),
+                ColumnDef("is_archived", "BOOL", nullable=False),
+            ],
+            indexes=[
+                IndexDef("idx_flags_active", "feature_flags", ["is_active"]),
+                IndexDef("idx_flags_archived", "feature_flags", ["is_archived"]),
+            ],
+        )
+        res = SchemaLinter(SchemaSnapshot(tables={"feature_flags": tbl})).lint()
+
+        w023_issues = [i for i in res.issues if i.code == "W023"]
+        assert len(w023_issues) == 2
+        assert all(i.rule == "low-cardinality-boolean-index" for i in w023_issues)
+        assert all(i.table == "feature_flags" for i in w023_issues)
+        flagged_cols = {i.columns[0] for i in w023_issues}
+        assert flagged_cols == {"is_active", "is_archived"}
+        assert "low-cardinality boolean column" in w023_issues[0].message
+        assert "partial index" in w023_issues[0].suggestion
+
+    def test_w023_ignores_composite_unique_non_btree_and_excluded(self) -> None:
+        tbl = TableDef(
+            name="flags",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("tenant_id", "bigint", nullable=False),
+                ColumnDef("is_primary", "boolean", nullable=False),
+                ColumnDef("is_enabled", "boolean", nullable=False),
+                ColumnDef("is_deleted", "boolean", nullable=False),
+            ],
+            indexes=[
+                IndexDef("idx_flags_tenant_deleted", "flags", ["tenant_id", "is_deleted"]),
+                IndexDef("idx_flags_primary_unique", "flags", ["is_primary"], unique=True),
+                IndexDef("idx_flags_enabled_hash", "flags", ["is_enabled"], method="hash"),
+            ],
+        )
+        res = SchemaLinter(SchemaSnapshot(tables={"flags": tbl})).lint()
+        assert not any(i.code == "W023" for i in res.issues)
+
+        excluded_tbl = TableDef(
+            name="legacy_flags",
+            columns=[
+                ColumnDef("id", "bigint", is_primary_key=True),
+                ColumnDef("active", "boolean", nullable=False),
+            ],
+            indexes=[IndexDef("idx_legacy_active", "legacy_flags", ["active"])],
+        )
+        res_excl = SchemaLinter(
+            SchemaSnapshot(tables={"legacy_flags": excluded_tbl}),
+            exclude_tables={"legacy_flags"},
+        ).lint()
+        assert not any(i.code == "W023" for i in res_excl.issues)
+
 
 
 class TestLintCLICommand:

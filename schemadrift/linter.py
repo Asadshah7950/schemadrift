@@ -467,6 +467,36 @@ class SchemaLinter:
                             )
                         )
 
+            # Rule W023: Low-cardinality boolean B-tree index
+            # Indexing a standalone boolean column with a regular non-unique B-tree index
+            # yields low selectivity (~50% cardinality). PostgreSQL's planner rarely uses it
+            # over a sequential scan, while writes incur extra WAL, VACUUM, and HOT costs.
+            # Prefer a partial index (WHERE col IS TRUE) or a high-cardinality leading key.
+            for idx in tbl.indexes:
+                if idx.unique or idx.method.lower() != "btree" or len(idx.columns) != 1:
+                    continue
+                target_col = cols_by_name.get(idx.columns[0])
+                if target_col and target_col.data_type.lower().strip() in {"boolean", "bool"}:
+                    msg = (
+                        f"Index '{idx.name}' on table '{tbl_name}' targets low-cardinality "
+                        f"boolean column '{target_col.name}'."
+                    )
+                    sugg = (
+                        f"Drop standalone index '{idx.name}' or replace it with a partial index "
+                        f"(WHERE {target_col.name} IS TRUE) or composite index."
+                    )
+                    issues.append(
+                        LintIssue(
+                            code="W023",
+                            rule="low-cardinality-boolean-index",
+                            severity="WARNING",
+                            table=tbl_name,
+                            message=msg,
+                            columns=[target_col.name],
+                            suggestion=sugg,
+                        )
+                    )
+
             # Rule W003: VARCHAR column without explicit length
             # Using VARCHAR (or CHARACTER VARYING) without a length limit is functionally
             # identical to TEXT in PostgreSQL, but omits the intent-clarifying constraint.
