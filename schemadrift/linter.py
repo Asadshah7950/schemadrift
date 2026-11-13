@@ -247,6 +247,30 @@ class SchemaLinter:
                     )
                 )
 
+            # Rule W024: Reserved keyword table name
+            # In PostgreSQL, naming a table with an SQL reserved word (such as 'user', 'order',
+            # 'group', 'table', 'select', 'where') requires double-quoting in every query,
+            # triggers syntax errors in raw SQL migrations, and breaks unquoted ORM queries.
+            tbl_name_lower = tbl_name.lower().strip()
+            if tbl_name_lower in POSTGRESQL_RESERVED_KEYWORDS:
+                issues.append(
+                    LintIssue(
+                        code="W024",
+                        rule="reserved-keyword-table-name",
+                        severity="WARNING",
+                        table=tbl_name,
+                        message=(
+                            f"Table '{tbl_name}' uses PostgreSQL "
+                            f"reserved keyword '{tbl_name_lower}'."
+                        ),
+                        suggestion=(
+                            f"Rename table '{tbl_name}' to a plural or descriptive non-reserved "
+                            f"identifier (e.g. '{tbl_name_lower}s', '{tbl_name_lower}_records', "
+                            f"or 'app_{tbl_name_lower}') to avoid mandatory double-quoting."
+                        ),
+                    )
+                )
+
             # Rule W002: Redundant / Left-prefix duplicate indexes
             # In PostgreSQL B-tree indexes, index (A) is redundant if index (A, B) exists,
             # unless the index is unique or uses a specialized access method/partial predicate.

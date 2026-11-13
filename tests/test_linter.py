@@ -1378,6 +1378,58 @@ class TestSchemaLinter:
         ).lint()
         assert not any(i.code == "W023" for i in res_excl.issues)
 
+    def test_detects_reserved_keyword_table_name(self) -> None:
+        tbl_user = TableDef(
+            name="user",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+        )
+        tbl_order = TableDef(
+            name="ORDER",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+        )
+        tbl_group = TableDef(
+            name="group",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+        )
+        res = SchemaLinter(
+            SchemaSnapshot(tables={"user": tbl_user, "ORDER": tbl_order, "group": tbl_group})
+        ).lint()
+
+        w024_issues = [i for i in res.issues if i.code == "W024"]
+        assert len(w024_issues) == 3
+        assert all(i.rule == "reserved-keyword-table-name" for i in w024_issues)
+        assert all(i.severity == "WARNING" for i in w024_issues)
+        flagged_tables = {i.table for i in w024_issues}
+        assert flagged_tables == {"user", "ORDER", "group"}
+        assert any("user" in i.message for i in w024_issues)
+        assert any("order" in i.message for i in w024_issues)
+        assert any("group" in i.message for i in w024_issues)
+        assert any("users" in i.suggestion for i in w024_issues)
+
+    def test_w024_ignores_non_reserved_and_excluded_tables(self) -> None:
+        tbl_users = TableDef(
+            name="users",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+        )
+        tbl_orders = TableDef(
+            name="customer_orders",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+        )
+        res = SchemaLinter(
+            SchemaSnapshot(tables={"users": tbl_users, "customer_orders": tbl_orders})
+        ).lint()
+        assert not any(i.code == "W024" for i in res.issues)
+
+        tbl_order = TableDef(
+            name="order",
+            columns=[ColumnDef("id", "bigint", is_primary_key=True)],
+        )
+        res_excl = SchemaLinter(
+            SchemaSnapshot(tables={"order": tbl_order}),
+            exclude_tables={"order"},
+        ).lint()
+        assert not any(i.code == "W024" for i in res_excl.issues)
+
 
 
 class TestLintCLICommand:
