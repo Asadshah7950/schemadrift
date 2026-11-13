@@ -26,7 +26,7 @@
 - 💾 **Portable JSON snapshots** — Capture schema snapshots with `snapshot --dsn ... -o schema.json` for Git versioning and offline audits
 - 🔄 **Offline & live drift detection** — Pure-Python diff engine comparing live databases, saved JSON snapshots, or mixed environments
 - 📝 **Safe SQL generation** — Produces `BEGIN`/`COMMIT`-wrapped migration scripts in the correct dependency order (drop FKs first, create tables before adding columns, etc.)
-- ⚡ **Zero-downtime migrations** — Native `--concurrently` support for `CREATE INDEX CONCURRENTLY` and `DROP INDEX CONCURRENTLY`
+- ⚡ **Zero-downtime migrations** — Native `--concurrently` indexing, two-phase foreign keys (`NOT VALID` + `VALIDATE CONSTRAINT`), lock-timeout guards, and topological DAG dependency ordering (Kahn's algorithm)
 - 🛑 **Destructive change protection** — Safeguard production with `--fail-on-destructive` (`-w`) to exit with code 2 if dropped tables or columns are detected
 - ⏪ **Rollback generator** — Generate reverse / down migrations with `--direction down`
 - 🖥️ **Rich CLI** — Beautiful terminal output powered by [Rich](https://github.com/Textualize/rich)
@@ -203,6 +203,19 @@ schemadrift diff \
   --source "postgres://user:pass@source-host/db" \
   --target "postgres://user:pass@target-host/db" \
   --concurrently
+
+# Zero-downtime safe migration mode (two-phase FKs with NOT VALID + lock_timeout guards)
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --safe-mode
+
+# Two-phase zero-downtime foreign keys with explicit lock acquisition timeout
+schemadrift diff \
+  --source "postgres://user:pass@source-host/db" \
+  --target "postgres://user:pass@target-host/db" \
+  --two-phase-fk \
+  --lock-timeout "2s" 
 
 # Offline diff: compare a saved JSON snapshot against a live database or another snapshot
 schemadrift diff \

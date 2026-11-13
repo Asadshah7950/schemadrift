@@ -104,6 +104,28 @@ def main() -> None:
     help="Create/drop indexes concurrently (disables transaction blocks).",
 )
 @click.option(
+    "--two-phase-fk",
+    is_flag=True,
+    default=False,
+    help="Generate zero-downtime two-phase foreign keys (NOT VALID followed by VALIDATE).",
+)
+@click.option(
+    "--lock-timeout",
+    default=None,
+    help="Set lock_timeout for migration transactions (e.g. '2s', '500ms').",
+)
+@click.option(
+    "--statement-timeout",
+    default=None,
+    help="Set statement_timeout for migration transactions (e.g. '30s', '1min').",
+)
+@click.option(
+    "--safe-mode",
+    is_flag=True,
+    default=False,
+    help="Enable zero-downtime safety presets (two-phase FKs, 2s lock_timeout).",
+)
+@click.option(
     "--fail-on-drift",
     is_flag=True,
     default=False,
@@ -137,6 +159,10 @@ def diff(
     direction: str,
     transaction: bool,
     concurrently: bool,
+    two_phase_fk: bool,
+    lock_timeout: str | None,
+    statement_timeout: str | None,
+    safe_mode: bool,
     fail_on_drift: bool,
     fail_on_destructive: bool,
     step_summary: bool,
@@ -173,6 +199,10 @@ def diff(
             diff_result,
             transaction=use_transaction,
             concurrent_indexes=concurrently,
+            two_phase_fk=two_phase_fk,
+            lock_timeout=lock_timeout,
+            statement_timeout=statement_timeout,
+            safe_mode=safe_mode,
         ).generate()
     elif fmt == "json":
         content = render_json_report(diff_result)
@@ -184,6 +214,10 @@ def diff(
             diff_result,
             transaction=use_transaction,
             concurrent_indexes=concurrently,
+            two_phase_fk=two_phase_fk,
+            lock_timeout=lock_timeout,
+            statement_timeout=statement_timeout,
+            safe_mode=safe_mode,
         ).generate()
         content = render_html_report(diff_result, sql=sql_script)
     else:  # summary

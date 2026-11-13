@@ -283,6 +283,37 @@ class TestDiffCommand:
             assert "BEGIN;" not in res.output
             assert "COMMIT;" not in res.output
 
+    def test_diff_two_phase_fk(self) -> None:
+        runner = CliRunner()
+        src = SchemaSnapshot()
+        tgt = _make_sample_snapshot_with_drift()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--two-phase-fk"],
+            )
+            assert res.exit_code == 0
+            assert "NOT VALID;" in res.output
+            assert "VALIDATE CONSTRAINT" in res.output
+
+    def test_diff_safe_mode(self) -> None:
+        runner = CliRunner()
+        src = SchemaSnapshot()
+        tgt = _make_sample_snapshot_with_drift()
+
+        with patch("schemadrift.cli.SchemaInspector") as mock_insp:
+            mock_insp.return_value.snapshot.side_effect = [src, tgt]
+            res = runner.invoke(
+                main,
+                ["diff", "--source", "pg://src", "--target", "pg://tgt", "--safe-mode"],
+            )
+            assert res.exit_code == 0
+            assert "SET lock_timeout = '2s';" in res.output
+            assert "NOT VALID;" in res.output
+            assert "VALIDATE CONSTRAINT" in res.output
+
 
 class TestInspectCommand:
     def test_inspect_prints_table(self) -> None:

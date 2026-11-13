@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from schemadrift.generator import MigrationGenerator
+from schemadrift.generator import MigrationGenerator, topological_sort_tables
 from schemadrift.models import (
     ColumnDef,
     DiffResult,
@@ -261,3 +261,115 @@ class TestConcurrentIndexOperations:
         )
         sql = MigrationGenerator(diff, concurrent_indexes=True).generate()
         assert "DROP INDEX CONCURRENTLY IF EXISTS" in sql
+
+
+class TestTopologicalSortTables:
+    def test_independent_tables_sorted_alphabetically(self) -> None:
+        t_b = TableDef(name="b_table")
+        t_a = TableDef(name="a_table")
+        ordered = topological_sort_tables([t_b, t_a])
+        assert [t.name for t in ordered] == ["a_table", "b_table"]
+
+    def test_single_fk_dependency_chain(self) -> None:
+        t_users = TableDef(name="users")
+        t_orders = TableDef(name="orders")
+        fk = ForeignKeyDef(
+            name="fk_orders_user",
+            table="orders",
+            columns=["user_id"],
+            ref_table="users",
+            ref_columns=["id"],
+        )
+        ordered = topological_sort_tables([t_orders, t_users], [fk])
+        assert [t.name for t in ordered] == ["users", "orders"]
+
+    def test_multi_level_dependency_chain(self) -> None:
+        t_items = TableDef(name="order_items")
+        t_orders = TableDef(name="orders")
+        t_users = TableDef(name="users")
+        fk1 = ForeignKeyDef(
+            name="fk_orders_users",
+            table="orders",
+            columns=["user_id"],
+            ref_table="users",
+            ref_columns=["id"],
+        )
+        fk2 = ForeignKeyDef(
+            name="fk_items_orders",
+            table="order_items",
+            columns=["order_id"],
+            ref_table="orders",
+            ref_columns=["id"],
+        )
+        ordered = topological_sort_tables([t_items, t_orders, t_users], [fk1, fk2])
+        assert [t.name for t in ordered] == ["users", "orders", "order_items"]
+
+    def test_circular_dependency_gracefully_resolved(self) -> None:
+        t_users = TableDef(name="users")
+        t_teams = TableDef(name="teams")
+        fk1 = ForeignKeyDef(
+            name="fk_users_team",
+            table="users",
+            columns=["team_id"],
+            ref_table="teams",
+            ref_columns=["id"],
+        )
+        fk2 = ForeignKeyDef(
+            name="fk_teams_leader",
+            table="teams",
+            columns=["leader_id"],
+            ref_table="users",
+            ref_columns=["id"],
+        )
+        ordered = topological_sort_tables([t_users, t_teams], [fk1, fk2])
+        assert len(ordered) == 2
+        assert {t.name for t in ordered} == {"users", "teams"}
+
+
+class TestZeroDowntimeMigrationFeatures:
+    def test_two_phase_foreign_key_generation(self) -> None:
+        diff = DiffResult()
+        diff.fks_added.append(
+            ForeignKeyDef(
+                name="fk_orders_user",
+                table="orders",
+                columns=["user_id"],
+                ref_table="users",
+                ref_columns=["id"],
+            )
+        )
+        sql = MigrationGenerator(diff, two_phase_fk=True).generate()
+        assert "NOT VALID;" in sql
+        assert "VALIDATE CONSTRAINT" in sql
+        not_valid_idx = sql.index("NOT VALID;")
+        validate_idx = sql.index("VALIDATE CONSTRAINT")
+        assert not_valid_idx < validate_idx
+
+    def test_lock_and_statement_timeouts_in_transaction(self) -> None:
+        diff = DiffResult()
+        diff.tables_added.append(TableDef(name="users"))
+        sql = MigrationGenerator(
+            diff,
+            lock_timeout="2s",
+            statement_timeout="30s",
+        ).generate()
+        assert "SET lock_timeout = '2s';" in sql
+        assert "SET statement_timeout = '30s';" in sql
+        assert "BEGIN;" in sql
+
+    def test_safe_mode_preset(self) -> None:
+        diff = DiffResult()
+        diff.fks_added.append(
+            ForeignKeyDef(
+                name="fk_orders_user",
+                table="orders",
+                columns=["user_id"],
+                ref_table="users",
+                ref_columns=["id"],
+            )
+        )
+        sql = MigrationGenerator(diff, safe_mode=True).generate()
+        assert "SET lock_timeout = '2s';" in sql
+        assert "SET statement_timeout = '30s';" in sql
+        assert "NOT VALID;" in sql
+        assert "VALIDATE CONSTRAINT" in sql

@@ -2,7 +2,61 @@
 
 from __future__ import annotations
 
-from schemadrift.models import ColumnDef, DiffResult, TableDef
+import collections
+
+from schemadrift.models import ColumnDef, DiffResult, ForeignKeyDef, TableDef
+
+
+def topological_sort_tables(
+    tables: list[TableDef],
+    foreign_keys: list[ForeignKeyDef] | None = None,
+) -> list[TableDef]:
+    """Sort TableDef objects in topological dependency order (referenced tables before dependents).
+
+    Uses Kahn's algorithm for directed acyclic graph (DAG) topological sorting.
+    If circular dependencies exist between newly added tables, remaining tables in the cycle
+    are resolved deterministically by table name, allowing deferred foreign key creation.
+    """
+    if len(tables) <= 1:
+        return list(tables)
+
+    tbl_map = {t.name: t for t in tables}
+    table_names = set(tbl_map.keys())
+
+    graph: dict[str, set[str]] = {name: set() for name in table_names}
+    in_degree: dict[str, int] = dict.fromkeys(table_names, 0)
+
+    if foreign_keys:
+        for fk in foreign_keys:
+            if (
+                fk.table in table_names
+                and fk.ref_table in table_names
+                and fk.table != fk.ref_table
+            ):
+                parent = fk.ref_table
+                child = fk.table
+                if child not in graph[parent]:
+                    graph[parent].add(child)
+                    in_degree[child] += 1
+
+    queue = collections.deque(
+        sorted([name for name, deg in in_degree.items() if deg == 0])
+    )
+    sorted_names: list[str] = []
+
+    while queue:
+        node = queue.popleft()
+        sorted_names.append(node)
+        for neighbor in sorted(graph[node]):
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if len(sorted_names) < len(table_names):
+        remaining = sorted([name for name in table_names if name not in sorted_names])
+        sorted_names.extend(remaining)
+
+    return [tbl_map[name] for name in sorted_names]
 
 
 class MigrationGenerator:
@@ -13,9 +67,18 @@ class MigrationGenerator:
         diff: DiffResult,
         transaction: bool | None = None,
         concurrent_indexes: bool = False,
+        two_phase_fk: bool = False,
+        lock_timeout: str | None = None,
+        statement_timeout: str | None = None,
+        safe_mode: bool = False,
     ) -> None:
         self.diff = diff
         self.concurrent_indexes = concurrent_indexes
+        self.two_phase_fk = two_phase_fk or safe_mode
+        self.lock_timeout = lock_timeout or ("2s" if safe_mode else None)
+        self.statement_timeout = statement_timeout or ("30s" if safe_mode else None)
+        self.safe_mode = safe_mode
+
         if transaction is None:
             self.transaction = not concurrent_indexes
         else:
@@ -30,14 +93,25 @@ class MigrationGenerator:
         2. DROP indexes
         3. ALTER / DROP columns
         4. DROP tables
-        5. CREATE tables
+        5. CREATE tables (topologically ordered by FK dependencies)
         6. ADD columns
         7. CREATE indexes
-        8. ADD foreign keys
+        8. ADD foreign keys (with optional NOT VALID two-phase safety)
+        9. ADD enum values
+        10. VALIDATE constraints (for two-phase foreign keys)
         """
+        timeout_headers: list[str] = []
+        if self.lock_timeout:
+            timeout_headers.append(f"SET lock_timeout = '{self.lock_timeout}';")
+        if self.statement_timeout:
+            timeout_headers.append(f"SET statement_timeout = '{self.statement_timeout}';")
+        timeout_str = ("\n".join(timeout_headers) + "\n\n") if timeout_headers else ""
+
         if self.diff.is_empty():
             if self.transaction:
-                return "BEGIN;\n-- No schema differences detected.\nCOMMIT;\n"
+                return f"BEGIN;\n{timeout_str}-- No schema differences detected.\nCOMMIT;\n"
+            if timeout_str:
+                return f"{timeout_str}-- No schema differences detected.\n"
             return "-- No schema differences detected.\n"
 
         statements: list[str] = []
@@ -72,8 +146,9 @@ class MigrationGenerator:
                 f"-- Drop table: {table_name}\nDROP TABLE IF EXISTS {_q(table_name)};"
             )
 
-        # 5. CREATE tables
-        for table in self.diff.tables_added:
+        # 5. CREATE tables (ordered topologically by FK dependencies)
+        ordered_tables = topological_sort_tables(self.diff.tables_added, self.diff.fks_added)
+        for table in ordered_tables:
             statements.append(_create_table_statement(table))
 
         # 6. ADD columns
@@ -94,16 +169,29 @@ class MigrationGenerator:
                 f"USING {idx.method} ({cols});"
             )
 
-        # 8. ADD foreign keys
+        # 8. ADD foreign keys (with optional two-phase zero-downtime NOT VALID)
+        validation_statements: list[str] = []
         for fk in self.diff.fks_added:
             src_cols = ", ".join(_q(c) for c in fk.columns)
             ref_cols = ", ".join(_q(c) for c in fk.ref_columns)
-            statements.append(
-                f"-- Add foreign key: {fk.name}\n"
-                f"ALTER TABLE {_q(fk.table)} ADD CONSTRAINT {_q(fk.name)} "
-                f"FOREIGN KEY ({src_cols}) REFERENCES {_q(fk.ref_table)} ({ref_cols}) "
-                f"ON DELETE {fk.on_delete};"
-            )
+            if self.two_phase_fk:
+                statements.append(
+                    f"-- Add foreign key (not valid for zero-downtime): {fk.name}\n"
+                    f"ALTER TABLE {_q(fk.table)} ADD CONSTRAINT {_q(fk.name)} "
+                    f"FOREIGN KEY ({src_cols}) REFERENCES {_q(fk.ref_table)} ({ref_cols}) "
+                    f"ON DELETE {fk.on_delete} NOT VALID;"
+                )
+                validation_statements.append(
+                    f"-- Validate foreign key: {fk.name}\n"
+                    f"ALTER TABLE {_q(fk.table)} VALIDATE CONSTRAINT {_q(fk.name)};"
+                )
+            else:
+                statements.append(
+                    f"-- Add foreign key: {fk.name}\n"
+                    f"ALTER TABLE {_q(fk.table)} ADD CONSTRAINT {_q(fk.name)} "
+                    f"FOREIGN KEY ({src_cols}) REFERENCES {_q(fk.ref_table)} ({ref_cols}) "
+                    f"ON DELETE {fk.on_delete};"
+                )
 
         # 9. Enum additions (informational – add values)
         for enum_name, labels in self.diff.enums_added:
@@ -113,9 +201,15 @@ class MigrationGenerator:
                     f"ALTER TYPE {_q(enum_name)} ADD VALUE IF NOT EXISTS '{label}';"
                 )
 
+        # 10. Constraint validations (phase 2 of zero-downtime foreign keys)
+        if validation_statements:
+            statements.extend(validation_statements)
+
         body = "\n\n".join(statements)
         if self.transaction:
-            return f"BEGIN;\n\n{body}\n\nCOMMIT;\n"
+            return f"BEGIN;\n\n{timeout_str}{body}\n\nCOMMIT;\n"
+        if timeout_str:
+            return f"{timeout_str}{body}\n"
         return f"{body}\n"
 
 
