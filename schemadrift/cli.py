@@ -9,6 +9,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from schemadrift import __version__
 from schemadrift.differ import SchemaDiffer
 from schemadrift.generator import MigrationGenerator
 from schemadrift.inspector import SchemaInspector
@@ -17,10 +18,14 @@ from schemadrift.models import SchemaSnapshot
 from schemadrift.reporter import (
     render_html_report,
     render_json_report,
+    render_lint_sarif,
     render_markdown_report,
+    render_safety_markdown,
+    render_safety_sarif,
     render_summary_report,
     write_github_step_summary,
 )
+from schemadrift.safety import MigrationSafetyAnalyzer
 
 console = Console()
 
@@ -368,9 +373,15 @@ def snapshot(dsn: str, output: str | None, compact: bool) -> None:
     "--format",
     "fmt",
     default="summary",
-    type=click.Choice(["summary", "json"]),
+    type=click.Choice(["summary", "json", "sarif"]),
     show_default=True,
     help="Output format.",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write JSON or SARIF lint report to this file path.",
 )
 @click.option(
     "--fail-on-warning",
@@ -397,6 +408,7 @@ def lint(
     dsn: str | None,
     snapshot_file: str | None,
     fmt: str,
+    output: str | None,
     fail_on_warning: bool,
     fail_on_error: bool,
     exclude_tables: tuple[str, ...],
@@ -412,10 +424,23 @@ def lint(
     linter = SchemaLinter(snap, exclude_tables=excluded_set)
     result = linter.lint()
 
-    if fmt == "json":
-        import json
+    if fmt in ("json", "sarif"):
+        if fmt == "json":
+            import json
 
-        click.echo(json.dumps(result.to_dict(), indent=2))
+            serialized = json.dumps(result.to_dict(), indent=2)
+        else:
+            schema_uri = resolved_source if _is_json_file(resolved_source) else "schema.json"
+            serialized = render_lint_sarif(
+                result, schema_uri=schema_uri, tool_version=__version__
+            )
+
+        if output:
+            with open(output, "w", encoding="utf-8") as fh:
+                fh.write(serialized)
+            console.print(f"[green]{fmt.upper()} lint report written to {output}[/green]")
+        else:
+            click.echo(serialized)
     else:
         if not result.issues:
             console.print(
@@ -457,4 +482,184 @@ def lint(
         sys.exit(1)
 
     if fail_on_warning and result.has_warnings:
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# check command
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.option(
+    "--source",
+    required=True,
+    help="Source database DSN or JSON schema snapshot path.",
+)
+@click.option(
+    "--target",
+    required=True,
+    help="Target database DSN or JSON schema snapshot path.",
+)
+@click.option(
+    "--direction",
+    "-d",
+    type=click.Choice(["up", "down"]),
+    default="up",
+    show_default=True,
+    help="Migration direction to audit.",
+)
+@click.option(
+    "--concurrently",
+    is_flag=True,
+    default=False,
+    help="Analyze assuming CREATE/DROP INDEX CONCURRENTLY is enabled.",
+)
+@click.option(
+    "--two-phase-fk",
+    is_flag=True,
+    default=False,
+    help="Analyze assuming foreign keys use NOT VALID + VALIDATE CONSTRAINT.",
+)
+@click.option(
+    "--lock-timeout",
+    default=None,
+    help="Lock timeout configured for migration execution (e.g. '2s').",
+)
+@click.option(
+    "--safe-mode",
+    is_flag=True,
+    default=False,
+    help="Analyze with zero-downtime safety presets (two-phase FKs, 2s lock_timeout).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    default="summary",
+    type=click.Choice(["summary", "json", "sarif", "markdown"]),
+    show_default=True,
+    help="Output format.",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write JSON, SARIF, or Markdown safety report to this file path.",
+)
+@click.option(
+    "--fail-on-hazard",
+    default="none",
+    type=click.Choice(["none", "critical", "high", "medium"]),
+    show_default=True,
+    help="Exit with status code 1 when hazards meet or exceed the threshold.",
+)
+@click.option(
+    "--step-summary/--no-step-summary",
+    default=True,
+    show_default=True,
+    help="Write markdown hazard summary to $GITHUB_STEP_SUMMARY when running in GitHub Actions.",
+)
+@click.option(
+    "--exclude",
+    "-e",
+    "exclude_tables",
+    multiple=True,
+    help="Exclude specific tables from migration hazard analysis.",
+)
+def check(
+    source: str,
+    target: str,
+    direction: str,
+    concurrently: bool,
+    two_phase_fk: bool,
+    lock_timeout: str | None,
+    safe_mode: bool,
+    fmt: str,
+    output: str | None,
+    fail_on_hazard: str,
+    step_summary: bool,
+    exclude_tables: tuple[str, ...],
+) -> None:
+    """Analyze a schema migration plan for PostgreSQL lock hazards and rollout risks."""
+    src_snapshot = _load_snapshot(source, label="source")
+    tgt_snapshot = _load_snapshot(target, label="target")
+
+    excluded_set = set(exclude_tables)
+    if direction == "down":
+        diff_result = SchemaDiffer(tgt_snapshot, src_snapshot, exclude_tables=excluded_set).diff()
+    else:
+        diff_result = SchemaDiffer(src_snapshot, tgt_snapshot, exclude_tables=excluded_set).diff()
+
+    report = MigrationSafetyAnalyzer(
+        diff_result,
+        concurrent_indexes=concurrently,
+        two_phase_fk=two_phase_fk,
+        lock_timeout=lock_timeout,
+        safe_mode=safe_mode,
+    ).analyze()
+
+    if step_summary:
+        write_github_step_summary(render_safety_markdown(report))
+
+    if fmt in ("json", "sarif", "markdown"):
+        if fmt == "json":
+            import json
+
+            serialized = json.dumps(report.to_dict(), indent=2)
+        elif fmt == "sarif":
+            serialized = render_safety_sarif(report, tool_version=__version__)
+        else:
+            serialized = render_safety_markdown(report)
+
+        if output:
+            with open(output, "w", encoding="utf-8") as fh:
+                fh.write(serialized)
+            console.print(f"[green]{fmt.upper()} safety report written to {output}[/green]")
+        else:
+            click.echo(serialized)
+    else:
+        if report.is_safe:
+            console.print(
+                "[bold green]✓ Zero-downtime safety check passed! "
+                "No lock hazards found.[/bold green]"
+            )
+        else:
+            table = Table(
+                title=f"Migration Safety Audit — Risk: {report.risk_level} "
+                f"({len(report.hazards)} hazard(s))",
+                show_header=True,
+                header_style="bold magenta",
+            )
+            table.add_column("Severity", justify="center", no_wrap=True)
+            table.add_column("Code", style="dim", no_wrap=True)
+            table.add_column("Lock Mode", style="yellow", no_wrap=True)
+            table.add_column("Target", style="cyan", no_wrap=True)
+            table.add_column("Hazard")
+            table.add_column("Remediation", style="green")
+
+            style_map = {
+                "CRITICAL": "bold red",
+                "HIGH": "red",
+                "MEDIUM": "bold yellow",
+                "LOW": "dim",
+            }
+            for hazard in report.hazards:
+                sev_style = style_map.get(hazard.severity, "bold yellow")
+                table.add_row(
+                    f"[{sev_style}]{hazard.severity}[/{sev_style}]",
+                    f"{hazard.code} ({hazard.rule})",
+                    hazard.lock_mode,
+                    hazard.target_object or hazard.table,
+                    hazard.message,
+                    hazard.remediation,
+                )
+
+            console.print(table)
+            console.print(
+                f"Summary: Risk=[bold]{report.risk_level}[/bold] | "
+                f"CRITICAL={report.critical_count}, HIGH={report.high_count}, "
+                f"MEDIUM={report.medium_count}"
+            )
+
+    if report.meets_threshold(fail_on_hazard):
         sys.exit(1)

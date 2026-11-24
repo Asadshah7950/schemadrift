@@ -6,10 +6,17 @@ import html
 import json
 import os
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from schemadrift.linter import LintResult
     from schemadrift.models import DiffResult
+    from schemadrift.safety import SafetyReport
+
+SARIF_SCHEMA_URL = (
+    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/"
+    "sarif-2.1/schema/sarif-schema-2.1.0.json"
+)
 
 
 def render_json_report(diff_result: DiffResult) -> str:
@@ -551,3 +558,163 @@ def write_github_step_summary(markdown_content: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _build_sarif_envelope(
+    tool_name: str,
+    tool_version: str,
+    rules: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+) -> str:
+    """Build a SARIF v2.1.0 JSON payload from tool metadata, rule definitions, and findings."""
+    payload = {
+        "$schema": SARIF_SCHEMA_URL,
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": tool_name,
+                        "version": tool_version,
+                        "informationUri": "https://github.com/Asadshah7950/schemadrift",
+                        "rules": rules,
+                    }
+                },
+                "results": results,
+            }
+        ],
+    }
+    return json.dumps(payload, indent=2)
+
+
+def _sarif_location(artifact_uri: str, logical_name: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "physicalLocation": {
+                "artifactLocation": {"uri": artifact_uri},
+                "region": {"startLine": 1},
+            },
+            "logicalLocations": [
+                {
+                    "fullyQualifiedName": logical_name,
+                    "kind": "table",
+                }
+            ],
+        }
+    ]
+
+
+def render_lint_sarif(
+    lint_result: LintResult,
+    schema_uri: str = "schema.json",
+    tool_version: str = "0.3.0",
+) -> str:
+    """Serialize a schema LintResult to SARIF v2.1.0 for GitHub Code Scanning."""
+    seen_rules: dict[str, dict[str, Any]] = {}
+    results: list[dict[str, Any]] = []
+
+    for issue in lint_result.issues:
+        level = "error" if issue.severity == "ERROR" else "warning"
+        if issue.code not in seen_rules:
+            seen_rules[issue.code] = {
+                "id": issue.code,
+                "name": issue.rule,
+                "shortDescription": {"text": f"{issue.code}: {issue.rule}"},
+                "defaultConfiguration": {"level": level},
+                "help": {"text": issue.suggestion or issue.message},
+            }
+
+        logical_name = (
+            f"{issue.table}.{','.join(issue.columns)}" if issue.columns else issue.table
+        )
+        results.append(
+            {
+                "ruleId": issue.code,
+                "level": level,
+                "message": {"text": f"{issue.message} Suggestion: {issue.suggestion}"},
+                "locations": _sarif_location(schema_uri, logical_name),
+                "properties": {
+                    "table": issue.table,
+                    "columns": issue.columns,
+                    "suggestion": issue.suggestion,
+                },
+            }
+        )
+
+    return _build_sarif_envelope(
+        tool_name="schemadrift-lint",
+        tool_version=tool_version,
+        rules=list(seen_rules.values()),
+        results=results,
+    )
+
+
+def render_safety_sarif(
+    safety_report: SafetyReport,
+    source_uri: str = "migration.sql",
+    tool_version: str = "0.3.0",
+) -> str:
+    """Serialize a MigrationSafetyAnalyzer SafetyReport to SARIF v2.1.0."""
+    level_map = {
+        "CRITICAL": "error",
+        "HIGH": "error",
+        "MEDIUM": "warning",
+        "LOW": "note",
+    }
+    seen_rules: dict[str, dict[str, Any]] = {}
+    results: list[dict[str, Any]] = []
+
+    for hazard in safety_report.hazards:
+        sarif_level = level_map.get(hazard.severity, "warning")
+        if hazard.code not in seen_rules:
+            seen_rules[hazard.code] = {
+                "id": hazard.code,
+                "name": hazard.rule,
+                "shortDescription": {"text": f"{hazard.code}: {hazard.rule}"},
+                "defaultConfiguration": {"level": sarif_level},
+                "help": {"text": hazard.remediation},
+            }
+
+        logical_name = hazard.target_object or hazard.table
+        results.append(
+            {
+                "ruleId": hazard.code,
+                "level": sarif_level,
+                "message": {"text": f"[{hazard.lock_mode}] {hazard.message}"},
+                "locations": _sarif_location(source_uri, logical_name),
+                "properties": {
+                    "severity": hazard.severity,
+                    "lock_mode": hazard.lock_mode,
+                    "table": hazard.table,
+                    "remediation": hazard.remediation,
+                },
+            }
+        )
+
+    return _build_sarif_envelope(
+        tool_name="schemadrift-check",
+        tool_version=tool_version,
+        rules=list(seen_rules.values()),
+        results=results,
+    )
+
+
+def render_safety_markdown(safety_report: SafetyReport) -> str:
+    """Serialize a SafetyReport to GitHub-flavored Markdown."""
+    if safety_report.is_safe:
+        return (
+            "### 🟢 Zero-Downtime Safety Check: Passed\n\n"
+            "No blocking PostgreSQL lock hazards or destructive operations detected."
+        )
+
+    lines = [
+        f"### ⚠️ PostgreSQL Migration Safety Audit (Risk: **{safety_report.risk_level}**)\n",
+        "| Severity | Code | Lock Mode | Target | Description |",
+        "| :--- | :--- | :--- | :--- | :--- |",
+    ]
+    for h in safety_report.hazards:
+        target = f"`{h.target_object or h.table}`"
+        lines.append(
+            f"| **{h.severity}** | `{h.code}` | `{h.lock_mode}` | {target} | {h.message} |"
+        )
+    return "\n".join(lines)

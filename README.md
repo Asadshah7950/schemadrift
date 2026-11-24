@@ -3,7 +3,7 @@
 > **Detect schema drift between PostgreSQL databases and generate safe, ordered migration SQL — from the command line.**
 
 [![CI](https://github.com/Asadshah7950/schemadrift/actions/workflows/ci.yml/badge.svg)](https://github.com/Asadshah7950/schemadrift/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen.svg)](https://github.com/Asadshah7950/schemadrift)
+[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](https://github.com/Asadshah7950/schemadrift)
 [![PyPI version](https://img.shields.io/pypi/v/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pg-schema-diff.svg)](https://pypi.org/project/pg-schema-diff/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -31,8 +31,9 @@
 - ⏪ **Rollback generator** — Generate reverse / down migrations with `--direction down`
 - 🖥️ **Rich CLI** — Beautiful terminal output powered by [Rich](https://github.com/Textualize/rich)
 - 📦 **Multiple output formats** — SQL, JSON, Markdown, human-readable summary, or interactive dark-mode HTML reports
-- 🛡️ **Schema Anti-Pattern Linter** — Static analysis detecting missing primary keys (E001), unindexed foreign keys (W001), and redundant prefix indexes (W002) with strict CI gates (`-W`)
-- 📊 **CI/CD Step Summary** — Automatically writes GitHub-flavored Markdown drift tables to `$GITHUB_STEP_SUMMARY`
+- 🛡️ **Schema Anti-Pattern Linter** — Static analysis detecting missing primary keys (E001), unindexed foreign keys (W001), and redundant prefix indexes (W002–W024) with strict CI gates (`-W`) and **SARIF v2.1.0** output
+- 🔒 **Migration Lock-Hazard Analyzer (`check`)** — Zero-downtime deployment safety audit (`HAZ001`–`HAZ008`) flagging blocking `ACCESS EXCLUSIVE`/`SHARE` locks, table rewrites, non-concurrent index changes, and missing `lock_timeout` guards
+- 📊 **CI/CD Step Summary & Code Scanning** — Automatically writes GitHub-flavored Markdown tables to `$GITHUB_STEP_SUMMARY` and SARIF v2.1.0 for GitHub Code Scanning
 - ✅ **95%+ unit test coverage** — All core logic tested without a live database
 
 ---
@@ -279,12 +280,41 @@ schemadrift lint --file schema.json
 # Fail CI/CD gate on any warnings or errors (exit code 1)
 schemadrift lint --file schema.json --fail-on-warning
 
-# Machine-readable JSON output for automated reporting
+# Machine-readable JSON or SARIF v2.1.0 (GitHub Code Scanning) output
 schemadrift lint --file schema.json --format json
+schemadrift lint --file schema.json --format sarif -o schemadrift-lint.sarif
 
 # Exclude legacy or third-party tables from lint checks
 schemadrift lint --file schema.json --exclude legacy_logs --exclude spatial_ref_sys
 ```
+
+### `check` — Migration Lock-Hazard & Zero-Downtime Safety Audit
+
+Audit a pending schema migration (`source` → `target`) for PostgreSQL lock hazards, table rewrites, and rolling-deployment incompatibilities (`HAZ001`–`HAZ008`):
+
+```bash
+# Audit migration hazards and fail CI on HIGH or CRITICAL risks
+schemadrift check --source prod.json --target target.json --fail-on-hazard high
+
+# Verify migration with zero-downtime flags enabled
+schemadrift check --source prod.json --target target.json --concurrently --safe-mode
+
+# Export SARIF v2.1.0 results for GitHub Security Code Scanning
+schemadrift check --source prod.json --target target.json --format sarif -o migration-check.sarif
+```
+
+#### Safety Rules (`HAZ001`–`HAZ008`)
+
+| Rule | Severity | Lock Mode | Description |
+|---|---|---|---|
+| **HAZ001** | `CRITICAL` | `ACCESS EXCLUSIVE` | Dropping a table causes irreversible data loss and breaks active queries/replicas during rolling rollouts. |
+| **HAZ002** | `CRITICAL` | `ACCESS EXCLUSIVE` | Dropping a column breaks running old application instances still querying the previous schema. |
+| **HAZ003** | `HIGH` | `SHARE` / `ACCESS EXCLUSIVE` | Creating or dropping indexes without `CONCURRENTLY` blocks writes/reads across the entire table. |
+| **HAZ004** | `HIGH` | `SHARE ROW EXCLUSIVE` | Single-step `ADD FOREIGN KEY` locks both tables during full validation; use `--two-phase-fk` (`NOT VALID`). |
+| **HAZ005** | `HIGH` / `MEDIUM` | `ACCESS EXCLUSIVE` | `ALTER COLUMN TYPE` causes blocking table rewrites (`MEDIUM` only for catalog-only `varchar` widening/`-> text`). |
+| **HAZ006** | `HIGH` | `ACCESS EXCLUSIVE` | Adding a `NOT NULL` column without a `DEFAULT` fails immediately on non-empty tables. |
+| **HAZ007** | `MEDIUM` | `ACCESS EXCLUSIVE` | Lock-acquiring DDL runs without `--lock-timeout`, risking PostgreSQL lock-queue traffic starvation. |
+| **HAZ008** | `HIGH` | `ACCESS EXCLUSIVE` | `SET NOT NULL` performs a full blocking table scan unless backed by a `CHECK ... NOT VALID` constraint. |
 
 #### Lint Rules
 
@@ -328,8 +358,10 @@ For complete system design diagrams, DAG topological ordering specifications, an
 | [`schemadrift/inspector.py`](schemadrift/inspector.py) | `SchemaInspector` — connects to PostgreSQL and builds a `SchemaSnapshot` using `information_schema` and `pg_catalog` queries |
 | [`schemadrift/differ.py`](schemadrift/differ.py) | `SchemaDiffer` — pure-Python comparison engine; no DB connection required |
 | [`schemadrift/linter.py`](schemadrift/linter.py) | `SchemaLinter` — static schema analysis engine detecting missing PKs, unindexed FKs, redundant indexes, and column type anti-patterns |
+| [`schemadrift/safety.py`](schemadrift/safety.py) | `MigrationSafetyAnalyzer` — evaluates `DiffResult` and DDL flags for PostgreSQL lock hazards (`HAZ001`–`HAZ008`) and rollout risks |
+| [`schemadrift/reporter.py`](schemadrift/reporter.py) | Multi-format audit & CI reporters (JSON, Markdown step summary, HTML report, SARIF v2.1.0) |
 | [`schemadrift/generator.py`](schemadrift/generator.py) | `MigrationGenerator` — converts a `DiffResult` into safe, ordered SQL wrapped in a transaction |
-| [`schemadrift/cli.py`](schemadrift/cli.py) | Click CLI exposing `diff`, `snapshot`, `inspect`, and `lint` commands with Rich terminal output |
+| [`schemadrift/cli.py`](schemadrift/cli.py) | Click CLI exposing `diff`, `snapshot`, `inspect`, `lint`, and `check` commands with Rich terminal output |
 
 ---
 

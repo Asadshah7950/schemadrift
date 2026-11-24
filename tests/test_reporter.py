@@ -8,6 +8,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from schemadrift.cli import main
+from schemadrift.linter import LintIssue, LintResult
 from schemadrift.models import (
     ColumnDef,
     DiffResult,
@@ -19,10 +20,14 @@ from schemadrift.models import (
 from schemadrift.reporter import (
     render_html_report,
     render_json_report,
+    render_lint_sarif,
     render_markdown_report,
+    render_safety_markdown,
+    render_safety_sarif,
     render_summary_report,
     write_github_step_summary,
 )
+from schemadrift.safety import MigrationHazard, SafetyReport
 
 
 def _make_diff_result() -> DiffResult:
@@ -166,3 +171,76 @@ def test_cli_diff_html_format(tmp_path: object) -> None:
         assert "Audit report written to" in res.output
         assert out_file.exists()
         assert "<!DOCTYPE html>" in out_file.read_text(encoding="utf-8")
+
+
+def test_render_lint_sarif() -> None:
+    lint_result = LintResult(
+        issues=[
+            LintIssue(
+                code="E001",
+                rule="missing-primary-key",
+                severity="ERROR",
+                table="events",
+                message="Table lacks a PK.",
+                suggestion="Add id PRIMARY KEY.",
+            ),
+            LintIssue(
+                code="W001",
+                rule="unindexed-foreign-key",
+                severity="WARNING",
+                table="orders",
+                columns=["user_id"],
+                message="FK column is unindexed.",
+                suggestion="Create index.",
+            ),
+        ]
+    )
+    sarif = json.loads(render_lint_sarif(lint_result, schema_uri="prod.json", tool_version="0.3.0"))
+    assert sarif["version"] == "2.1.0"
+    run = sarif["runs"][0]
+    assert run["tool"]["driver"]["name"] == "schemadrift-lint"
+    assert run["tool"]["driver"]["version"] == "0.3.0"
+    assert len(run["tool"]["driver"]["rules"]) == 2
+    assert run["results"][0]["level"] == "error"
+    assert run["results"][1]["level"] == "warning"
+    assert (
+        run["results"][1]["locations"][0]["logicalLocations"][0]["fullyQualifiedName"]
+        == "orders.user_id"
+    )
+
+
+def test_render_safety_sarif_and_markdown() -> None:
+    safe = SafetyReport()
+    assert "Safety Check: Passed" in render_safety_markdown(safe)
+
+    risky = SafetyReport(
+        hazards=[
+            MigrationHazard(
+                code="HAZ001",
+                rule="destructive-table-drop",
+                severity="CRITICAL",
+                lock_mode="ACCESS EXCLUSIVE",
+                table="temp_users",
+                target_object="temp_users",
+                message="Dropping table drops data.",
+                remediation="Drop in next release.",
+            ),
+            MigrationHazard(
+                code="HAZ007",
+                rule="missing-lock-timeout-guard",
+                severity="MEDIUM",
+                lock_mode="ACCESS EXCLUSIVE",
+                table="*",
+                target_object="session.lock_timeout",
+                message="Missing lock_timeout.",
+                remediation="Pass --lock-timeout 2s.",
+            ),
+        ]
+    )
+    sarif = json.loads(render_safety_sarif(risky))
+    assert sarif["version"] == "2.1.0"
+    assert sarif["runs"][0]["results"][0]["level"] == "error"
+    assert sarif["runs"][0]["results"][1]["level"] == "warning"
+    md = render_safety_markdown(risky)
+    assert "Risk: **CRITICAL**" in md
+    assert "`HAZ001`" in md

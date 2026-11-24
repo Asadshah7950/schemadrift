@@ -492,3 +492,136 @@ class TestMarkdownFormatter:
         assert "| **Indexes Dropped** |" in md
         assert "| **Foreign Keys Added** |" in md
         assert "| **Foreign Keys Dropped** |" in md
+
+
+class TestCheckAndSarifCommands:
+    def test_lint_sarif_output_file(self, tmp_path) -> None:
+        runner = CliRunner()
+        snap = SchemaSnapshot(tables={"logs": TableDef(name="logs")})
+        snap_file = tmp_path / "schema.json"
+        sarif_file = tmp_path / "lint.sarif"
+        snap.to_file(str(snap_file))
+
+        res = runner.invoke(
+            main,
+            [
+                "lint",
+                "--file",
+                str(snap_file),
+                "--format",
+                "sarif",
+                "--output",
+                str(sarif_file),
+                "--no-fail-on-error",
+            ],
+        )
+        assert res.exit_code == 0
+        assert sarif_file.exists()
+        sarif = json.loads(sarif_file.read_text(encoding="utf-8"))
+        assert sarif["version"] == "2.1.0"
+        assert sarif["runs"][0]["results"][0]["ruleId"] == "E001"
+
+    def test_check_safe_and_hazardous_migrations(self, tmp_path) -> None:
+        runner = CliRunner()
+        src = SchemaSnapshot(
+            tables={
+                "users": TableDef(
+                    name="users",
+                    columns=[ColumnDef(name="id", data_type="bigint", is_primary_key=True)],
+                )
+            }
+        )
+        tgt = SchemaSnapshot(
+            tables={
+                "users": TableDef(
+                    name="users",
+                    columns=[
+                        ColumnDef(name="id", data_type="bigint", is_primary_key=True),
+                        ColumnDef(name="bio", data_type="text"),
+                    ],
+                )
+            }
+        )
+        src_file = tmp_path / "src.json"
+        tgt_file = tmp_path / "tgt.json"
+        src.to_file(str(src_file))
+        tgt.to_file(str(tgt_file))
+
+        # Summary mode without lock_timeout reports HAZ007 MEDIUM hazard
+        res_warn = runner.invoke(
+            main,
+            [
+                "check",
+                "--source",
+                str(src_file),
+                "--target",
+                str(tgt_file),
+                "--fail-on-hazard",
+                "medium",
+                "--no-step-summary",
+            ],
+        )
+        assert res_warn.exit_code == 1
+        assert "HAZ007" in res_warn.output
+
+        # Safe mode clears HAZ007 and passes cleanly
+        res_safe = runner.invoke(
+            main,
+            [
+                "check",
+                "--source",
+                str(src_file),
+                "--target",
+                str(tgt_file),
+                "--safe-mode",
+                "--fail-on-hazard",
+                "medium",
+                "--no-step-summary",
+            ],
+        )
+        assert res_safe.exit_code == 0
+        assert "safety check passed" in res_safe.output
+
+        # JSON and SARIF export for destructive direction=down
+        sarif_out = tmp_path / "check.sarif"
+        res_sarif = runner.invoke(
+            main,
+            [
+                "check",
+                "--source",
+                str(src_file),
+                "--target",
+                str(tgt_file),
+                "--direction",
+                "down",
+                "--format",
+                "sarif",
+                "--output",
+                str(sarif_out),
+                "--no-step-summary",
+            ],
+        )
+        assert res_sarif.exit_code == 0
+        parsed = json.loads(sarif_out.read_text(encoding="utf-8"))
+        assert any(r["ruleId"] == "HAZ002" for r in parsed["runs"][0]["results"])
+
+        res_json = runner.invoke(
+            main,
+            [
+                "check",
+                "--source",
+                str(src_file),
+                "--target",
+                str(tgt_file),
+                "--direction",
+                "down",
+                "--format",
+                "json",
+                "--fail-on-hazard",
+                "critical",
+                "--no-step-summary",
+            ],
+        )
+        assert res_json.exit_code == 1
+        data = json.loads(res_json.output)
+        assert data["risk_level"] == "CRITICAL"
